@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>自動火災報知設備点検票・配線点検票 清書システム</title>
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --secondary: #3b82f6;
+            --bg-color: #f1f5f9;
+            --border-color: #000;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: "MS Mincho", "Hiragino Mincho ProN", serif; }
+        body { background: var(--bg-color); color: #000; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        /* App Header */
+        header { background: var(--primary); color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { font-size: 1.1rem; font-weight: normal; }
+        .header-btns { display: flex; gap: 10px; }
+        .btn { background: var(--secondary); color: white; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-family: sans-serif; transition: background 0.2s; }
+        .btn:hover { background: #2563eb; }
+        .btn-success { background: #059669; }
+        .btn-success:hover { background: #047857; }
+        .btn-danger { background: #dc2626; }
+        .btn-danger:hover { background: #b91c1c; }
+
+        /* Main Layout */
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        
+        /* Left Panel: Form & Editor */
+        .editor-panel { width: 450px; background: white; border-right: 1px solid #cbd5e1; display: flex; flex-direction: column; box-shadow: 2px 0 5px rgba(0,0,0,0.05); z-index: 10; }
+        .tabs { display: flex; background: #e2e8f0; border-bottom: 1px solid #cbd5e1; overflow-x: auto; }
+        .tab-btn { padding: 10px 12px; border: none; background: none; cursor: pointer; font-size: 0.8rem; font-family: sans-serif; white-space: nowrap; color: #475569; font-weight: bold; }
+        .tab-btn.active { background: white; color: var(--primary); border-bottom: 2px solid var(--primary); }
+        .form-content { flex: 1; overflow-y: auto; padding: 15px; }
+        .form-section { display: none; }
+        .form-section.active { display: block; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 0.85rem; font-family: sans-serif; font-weight: bold; margin-bottom: 4px; color: #334155; }
+        .form-control { width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.9rem; }
+        .form-row { display: flex; gap: 10px; }
+        .form-row .form-group { flex: 1; }
+        .section-title { font-size: 0.95rem; font-weight: bold; margin: 15px 0 8px 0; padding-bottom: 4px; border-bottom: 1px solid #cbd5e1; color: var(--primary); font-family: sans-serif; }
+
+        /* Right Panel: Official Preview */
+        .preview-panel { flex: 1; background: #94a3b8; overflow-y: auto; padding: 30px; display: flex; flex-direction: column; align-items: center; }
+        
+        /* A4 Sheet Simulation */
+        .a4-sheet { background: white; width: 210mm; min-height: 297mm; padding: 15mm 15mm 15mm 15mm; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); position: relative; display: flex; flex-direction: column; justify-content: space-between; }
+        
+        /* Official Table Styles */
+        .doc-title-area { text-align: center; margin-bottom: 10px; position: relative; }
+        .form-id { position: absolute; top: 0; left: 0; font-size: 9pt; }
+        .page-id { position: absolute; top: 0; right: 0; font-size: 9pt; }
+        .doc-title { font-size: 14pt; font-weight: bold; letter-spacing: 2mm; margin-top: 5px; }
+
+        table.official-table { width: 100%; border-collapse: collapse; border: 1.5px solid #000; font-size: 9pt; table-layout: fixed; }
+        table.official-table th, table.official-table td { border: 1px solid #000; padding: 2px 4px; overflow: hidden; word-break: break-all; vertical-align: middle; }
+        
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .vertical-text { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 1px; margin: 0 auto; font-size: 8.5pt; }
+
+        /* Remarks */
+        .remarks { font-size: 7.5pt; margin-top: 8px; line-height: 1.3; font-family: sans-serif; }
+        .remarks ol { padding-left: 15px; }
+
+        /* Modal / Helper */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 20px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
+
+        @media print {
+            body { background: white; overflow: visible; height: auto; }
+            header, .editor-panel { display: none !important; }
+            .preview-panel { background: none; padding: 0; overflow: visible; align-items: stretch; }
+            .a4-sheet { box-shadow: none; margin: 0; width: 100%; height: 100%; page-break-after: always; padding: 10mm; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>自動火災報知設備点検票・配線点検票 清書システム</h1>
+        <div class="header-btns">
+            <button class="btn btn-success" onclick="loadSampleData()">手書きデータを自動読込</button>
+            <button class="btn" onclick="window.print()">印刷 / PDF保存</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- 左側：編集・個別修正パネル -->
+        <div class="editor-panel">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab(event, 'tab-basic')">基本情報</button>
+                <button class="tab-btn" onclick="switchTab(event, 'tab-s1')">その1(受信機)</button>
+                <button class="tab-btn" onclick="switchTab(event, 'tab-s2')">その2(感知器等)</button>
+                <button class="tab-btn" onclick="switchTab(event, 'tab-s3')">その3(総合)</button>
+                <button class="tab-btn" onclick="switchTab(event, 'tab-s4')">その4(区域)</button>
+                <button class="tab-btn" onclick="switchTab(event, 'tab-w')">配線点検票</button>
+            </div>
+            
+            <div class="form-content">
+                <!-- 基本情報タブ -->
+                <div id="tab-basic" class="form-section active">
+                    <div class="section-title">物件・点検者情報</div>
+                    <div class="form-group">
+                        <label>名称（物件名）</label>
+                        <input type="text" id="f-name" class="form-control" value="〇〇マンション" oninput="updatePreview()">
+                    </div>
+                    <div class="form-group">
+                        <label>所在</label>
+                        <input type="text" id="f-location" class="form-control" value="東京都新宿区西新宿X-X-X" oninput="updatePreview()">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>防火管理者</label>
+                            <input type="text" id="f-fire-mgr" class="form-control" value="" oninput="updatePreview()">
+                        </div>
+                        <div class="form-group">
+                            <label>立会者</label>
+                            <input type="text" id="f-witness" class="form-control" value="" oninput="updatePreview()">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>点検種別</label>
+                            <select id="f-type" class="form-control" onchange="updatePreview()">
+                                <option value="機器・総合" selected>機器・総合</option>
+                                <option value="機器">機器</option>
+                                <option value="総合">総合</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>点検年月日</label>
+                            <input type="text" id="f-date" class="form-control" value="令和6年8月6日" oninput="updatePreview()">
+                        </div>
+                    </div>
+                    <div class="section-title">点検者詳細</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>資格</label>
+                            <input type="text" id="f-qual" class="form-control" value="第2種" oninput="updatePreview()">
+                        </div>
+                        <div class="form-group">
+                            <label>番号</label>
+                            <input type="text" id="f-qual-no" class="form-control" value="250101530" oninput="updatePreview()">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>氏名</label>
+                        <input type="text" id="f-inspector" class="form-control" value="田端 祐希" oninput="updatePreview()">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>社名・所属会社</label>
+                            <input type="text" id="f-company" class="form-control" value="" oninput="updatePreview()">
+                        </div>
+                        <div class="form-group">
+                            <label>TEL</label>
+                            <input type="text" id="f-tel" class="form-control" value="" oninput="updatePreview()">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- その1タブ：受信機 -->
+                <div id="tab-s1" class="form-section">
+                    <div class="section-title">受信機・設備概要</div>
+                    <div class="form-group">
+                        <label>製造者名</label>
+                        <input type="text" id="f-rcv-maker" class="form-control" value="パナソニック株式会社" oninput="updatePreview()">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>型式等</label>
+                            <input type="text" id="f-rcv-model" class="form-control" value="受第8〜3号 P-2 3/5回線 1997年製" oninput="updatePreview()">
+                        </div>
+                    </div>
+                    <div class="section-title">予備電源データ</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>形式 (電圧・容量)</label>
+                            <input type="text" id="f-bat-form" class="form-control" value="24V 0.29Ah" oninput="updatePreview()">
+                        </div>
+                        <div class="form-group">
+                            <label>品評等</label>
+                            <input type="text" id="f-bat-eval" class="form-control" value="品評特 24〜4号" oninput="updatePreview()">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>端子電圧</label>
+                        <input type="text" id="f-volt" class="form-control" value="良 26.4 V" oninput="updatePreview()">
+                    </div>
+                    <div class="section-title">主要測定値</div>
+                    <div class="form-group">
+                        <label>周囲の状況</label>
+                        <input type="text" id="f-env" class="form-control" value="1階エントランス" oninput="updatePreview()">
+                    </div>
+                    <div class="form-group">
+                        <label>ヒューズ類</label>
+                        <input type="text" id="f-fuse" class="form-control" value="0.5, 1, 2 A" oninput="updatePreview()">
+                    </div>
+                </div>
+
+                <!-- その2タブ：感知器・音響装置 -->
+                <div id="tab-s2" class="form-section">
+                    <div class="section-title">音響装置・感知器特性</div>
+                    <div class="form-group">
+                        <label>音響装置取付状態</label>
+                        <input type="text" id="f-sound-cond" class="form-control" value="総合盤内組立" oninput="updatePreview()">
+                    </div>
+                    <div class="form-group">
+                        <label>音圧等</label>
+                        <input type="text" id="f-sound-pres" class="form-control" value="92dB以上" oninput="updatePreview()">
+                    </div>
+                    <div class="form-group">
+                        <label>鳴動方式</label>
+                        <input type="text" id="f-sound-type" class="form-control" value="一斉 区分 相互 再鳴動" oninput="updatePreview()">
+                    </div>
+                </div>
+
+                <!-- その3タブ：総合点検 -->
+                <div id="tab-s3" class="form-section">
+                    <div class="section-title">総合点検・自動試験</div>
+                    <p style="font-size:0.85rem; color:#64748b; margin-bottom:10px;">自動試験機能および総合作動の判定項目はチェック（○）が基本です。</p>
+                    <div class="form-group">
+                        <label>備考・特記事項</label>
+                        <textarea id="f-s3-remark" class="form-control" rows="4" oninput="updatePreview()"></textarea>
+                    </div>
+                </div>
+
+                <!-- その4タブ：警戒区域・部屋別数量 -->
+                <div id="tab-s4" class="form-section">
+                    <div class="section-title">警戒区域・感知器数量内訳</div>
+                    <p style="font-size:0.85rem; color:#64748b; margin-bottom:10px;">各階・各号室の感知器数を入力してください。</p>
+                    <div class="form-group">
+                        <label>1階 数量 (差動 / 定温)</label>
+                        <div class="form-row">
+                            <input type="text" id="f-r1-diff" class="form-control" value="1" oninput="updatePreview()">
+                            <input type="text" id="f-r1-heat" class="form-control" value="1" oninput="updatePreview()">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>2階 数量 (差動 / 定温)</label>
+                        <div class="form-row">
+                            <input type="text" id="f-r2-diff" class="form-control" value="10" oninput="updatePreview()">
+                            <input type="text" id="f-r2-heat" class="form-control" value="5" oninput="updatePreview()">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>3階 数量 (差動 / 定温)</label>
+                        <div class="form-row">
+                            <input type="text" id="f-r3-diff" class="form-control" value="10" oninput="updatePreview()">
+                            <input type="text" id="f-r3-heat" class="form-control" value="5" oninput="updatePreview()">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>個別部屋詳細 (201〜205, 301〜305, 101等)</label>
+                        <textarea id="f-rooms-detail" class="form-control" rows="6" oninput="updatePreview()">201: 差動2, 定温2
+202: 差動2, 定温1 (カーテン間切り)
+203: 差動2, 定温1
+204: 差動2, 定温1
+205: 差動2, 定温2
+301: 差動2, 定温2
+302: 差動2, 定温2
+303: 差動2, 定温1
+304: 差動2, 定温1 (カーテン)
+305: 差動2, 定温2
+101: 差動1, 定温1</textarea>
+                    </div>
+                </div>
+
+                <!-- 配線点検票タブ -->
+                <div id="tab-w" class="form-section">
+                    <div class="section-title">配線点検票データ</div>
+                    <div class="form-group">
+                        <label>専用回路</label>
+                        <input type="text" id="f-w-circuit" class="form-control" value="1階分電盤" oninput="updatePreview()">
+                    </div>
+                    <div class="form-group">
+                        <label>開閉器・遮断器</label>
+                        <input type="text" id="f-w-breaker" class="form-control" value="NFB-20A" oninput="updatePreview()">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>絶縁抵抗 常用</label>
+                            <input type="text" id="f-w-ins-normal" class="form-control" value="70" oninput="updatePreview()">
+                        </div>
+                        <div class="form-group">
+                            <label>絶縁抵抗 非常</label>
+                            <input type="text" id="f-w-ins-emergency" class="form-control" value="50" oninput="updatePreview()">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右側：リアルタイム公式プレビューパネル -->
+        <div class="preview-panel" id="preview-container">
+            <!-- その1 -->
+            <div class="a4-sheet" id="sheet-1">
+                <div>
+                    <div class="doc-title-area">
+                        <div class="form-id">別記様式第11</div>
+                        <div class="page-id">(その1)</div>
+                        <div class="doc-title">自動火災報知設備点検票</div>
+                    </div>
+                    <table class="official-table" style="margin-top: 10px;">
+                        <colgroup>
+                            <col style="width: 10%;">
+                            <col style="width: 23%;">
+                            <col style="width: 10%;">
+                            <col style="width: 23%;">
+                            <col style="width: 12%;">
+                            <col style="width: 22%;">
+                        </colgroup>
+                        <tr>
+                            <td class="text-center">名 称</td>
+                            <td colspan="3"><span id="p-name">〇〇マンション</span></td>
+                            <td class="text-center">防火管理者</td>
+                            <td><span id="p-fire-mgr"></span></td>
+                        </tr>
+                        <tr>
+                            <td class="text-center">所 在</td>
+                            <td colspan="3"><span id="p-location">東京都新宿区西新宿X-X-X</span></td>
+                            <td class="text-center">立会者</td>
+                            <td><span id="p-witness"></span></td>
+                        </tr>
+                        <tr>
+                            <td class="text-center">点検種別</td>
+                            <td>機器・総合</td>
+                            <td class="text-center">点検年月日</td>
+                            <td colspan="3"><span id="p-date">令和6年8月6日</span> 〜 令和6年8月6日</td>
+                        </tr>
+                        <tr>
+                            <td class="text-center" rowspan="2">点検者</td>
+                            <td colspan="3">資格 <span id="p-qual">第2種</span> 番号 <span id="p-qual-no">250101530</span></td>
+                            <td class="text-center">社名</td>
+                            <td><span id="p-company"></span></td>
+                        </tr>
+                        <tr>
+                            <td colspan="3">氏名 <span id="p-inspector">田端 祐希</span></td>
+                            <td class="text-center">住所 / TEL</td>
+                            <td><span id="p-tel"></span></td>
+                        </tr>
+                        <tr>
+                            <td class="text-center">点 検 設 備 名</td>
+                            <td>受 信 機</td>
+                            <td class="text-center">製造者名<br>型式等</td>
+                            <td colspan="3"><span id="p-rcv-maker">パナソニック株式会社</span><br><span id="p-rcv-model">受第8〜3号 P-2 3/5回線 1997年製</span></td>
+                        </tr>
+                    </table>
+
+                    <table class="official-table" style="margin-top: 5px;">
+                        <colgroup>
+                            <col style="width: 5%;">
+                            <col style="width: 5%;">
+                            <col style="width: 20%;">
+                            <col style="width: 20%;">
+                            <col style="width: 8%;">
+                            <col style="width: 22%;">
+                            <col style="width: 20%;">
+                        </colgroup>
+                        <tr>
+                            <td colspan="3" class="text-center" style="font-weight:bold;">点 検 項 目</td>
+                            <td class="text-center" style="font-weight:bold;">種別・容量等の内容</td>
+                            <td class="text-center" style="font-weight:bold;">判定</td>
+                            <td class="text-center" style="font-weight:bold;">不 良 内 容</td>
+                            <td class="text-center" style="font-weight:bold;">措 置 内 容</td>
+                        </tr>
+                        <tr>
+                            <td rowspan="8" class="text-center"><div class="vertical-text">予備電源・非常電源</div></td>
+                            <td colspan="2">外形</td>
+                            <td><span id="p-bat-form">24V 0.29Ah</span></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">表示</td>
+                            <td><span id="p-bat-eval">品評特 24〜4号</span></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">※端子電圧</td>
+                            <td><span id="p-volt">良 26.4 V</span></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">※切替装置</td>
+                            <td>自動切替</td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">※充電装置</td>
+                            <td>トリクル充電</td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">※結線接続</td>
+                            <td>コネクター接続</td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">周囲の状況</td>
+                            <td><span id="p-env">1階エントランス</span></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">外形・表示</td>
+                            <td>P-2 埋込型</td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td rowspan="19" class="text-center"><div class="vertical-text">受信機・中継器</div></td>
+                            <td colspan="2">警戒区域の表示装置</td>
+                            <td></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">電 圧 計</td>
+                            <td>「交流電源」灯 V</td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">スイッチ類</td>
+                            <td></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">ヒューズ類</td>
+                            <td><span id="p-fuse">0.5, 1, 2 A</span></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">※継 電 器</td>
+                            <td></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">表 示 灯</td>
+                            <td></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">通 話 装 置</td>
+                            <td></td>
+                            <td class="text-center">/</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">※結線接続</td>
+                            <td></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">接 地</td>
+                            <td></td>
+                            <td class="text-center">/</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">附属装置</td>
+                            <td></td>
+                            <td class="text-center">/</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td rowspan="4">※火災表示等</td>
+                            <td>蓄積式</td>
+                            <td></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>アナログ式</td>
+                            <td></td>
+                            <td class="text-center">/</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>二信号式</td>
+                            <td></td>
+                            <td class="text-center">/</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>その他</td>
+                            <td></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">※注意表示</td>
+                            <td></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">回 路 導 通</td>
+                            <td>常時監視</td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">設定表示温度等</td>
+                            <td></td>
+                            <td class="text-center">/</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">感知器作動等の表示</td>
+                            <td></td>
+                            <td class="text-center">/</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">予 備 品 等</td>
+                            <td>ヒューズ等</td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="remarks">
+                    <ol>
+                        <li>この用紙の大きさは、日本産業規格A4とすること。</li>
+                        <li>種別・容量等の内容欄は、該当するものについて記入すること。</li>
+                        <li>判定欄は、正常の場合は○印、不良の場合は×印を記入し、不良内容欄にその内容を記入すること。</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- その2 -->
+            <div class="a4-sheet" id="sheet-2">
+                <div>
+                    <div class="doc-title-area">
+                        <div class="form-id">別記様式第11</div>
+                        <div class="page-id">(その2)</div>
+                        <div class="doc-title">自動火災報知設備点検票</div>
+                    </div>
+                    <table class="official-table" style="margin-top: 15px;">
+                        <colgroup>
+                            <col style="width: 5%;">
+                            <col style="width: 25%;">
+                            <col style="width: 35%;">
+                            <col style="width: 10%;">
+                            <col style="width: 25%;">
+                        </colgroup>
+                        <tr>
+                            <td colspan="2" class="text-center" style="font-weight:bold;">点 検 項 目</td>
+                            <td class="text-center" style="font-weight:bold;">種別・容量等の内容</td>
+                            <td class="text-center" style="font-weight:bold;">判定</td>
+                            <td class="text-center" style="font-weight:bold;">不 良 内 容 / 措置内容</td>
+                        </tr>
+                        <tr>
+                            <td rowspan="5" class="text-center"><div class="vertical-text">感 知 状 況</div></td>
+                            <td>未警戒部分</td>
+                            <td></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>感知区域</td>
+                            <td></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>適応性</td>
+                            <td></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>機能障害</td>
+                            <td></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>※スポット型</td>
+                            <td>差動・定温(再) 熱アナログ</td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td rowspan="4" class="text-center"><div class="vertical-text">熱 感 知 器</div></td>
+                            <td>分布型(空気管式)</td>
+                            <td></td>
+                            <td class="text-center">/</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>分布型(熱電対・半導体)</td>
+                            <td></td>
+                            <td class="text-center">/</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>感知線型</td>
+                            <td></td>
+                            <td class="text-center">/</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>※スポット型(イオン・光電)</td>
+                            <td></td>
+                            <td class="text-center">/</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td rowspan="3" class="text-center"><div class="vertical-text">音 響 装 置</div></td>
+                            <td>取付状態</td>
+                            <td>総合盤内組立</td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>音圧等</td>
+                            <td>92dB以上</td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>鳴動方式</td>
+                            <td>一斉 区分 相互 再鳴動</td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="remarks">
+                    <ol>
+                        <li>この用紙の大きさは、日本産業規格A4とすること。</li>
+                        <li>判定欄は、正常の場合は○印、不良の場合は×印を記入すること。</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- その3 -->
+            <div class="a4-sheet" id="sheet-3">
+                <div>
+                    <div class="doc-title-area">
+                        <div class="form-id">別記様式第11</div>
+                        <div class="page-id">(その3)</div>
+                        <div class="doc-title">自動火災報知設備点検票</div>
+                    </div>
+                    <table class="official-table" style="margin-top: 15px;">
+                        <colgroup>
+                            <col style="width: 35%;">
+                            <col style="width: 45%;">
+                            <col style="width: 20%;">
+                        </colgroup>
+                        <tr>
+                            <td colspan="2" class="text-center" style="font-weight:bold;">自動試験機能 / 総合点検項目</td>
+                            <td class="text-center" style="font-weight:bold;">判定結果</td>
+                        </tr>
+                        <tr>
+                            <td rowspan="6" class="text-center"><div class="vertical-text">自 動 試 験 機 能</div></td>
+                            <td>予備電源・非常電源</td>
+                            <td class="text-center">/</td>
+                        </tr>
+                        <tr>
+                            <td>受信機の火災表示</td>
+                            <td class="text-center">/</td>
+                        </tr>
+                        <tr>
+                            <td>受信機の注意表示</td>
+                            <td class="text-center">/</td>
+                        </tr>
+                        <tr>
+                            <td>受信機・中継器の制御機能・電路</td>
+                            <td class="text-center">/</td>
+                        </tr>
+                        <tr>
+                            <td>感知器回路・ベル回路</td>
+                            <td class="text-center">/</td>
+                        </tr>
+                        <tr>
+                            <td>無線機能</td>
+                            <td class="text-center">/</td>
+                        </tr>
+                        <tr>
+                            <td rowspan="4" class="text-center">総 合 点 検</td>
+                            <td>同時作動</td>
+                            <td class="text-center">○</td>
+                        </tr>
+                        <tr>
+                            <td>※煙感知器等の感度</td>
+                            <td class="text-center">/</td>
+                        </tr>
+                        <tr>
+                            <td>地区音響装置の音圧</td>
+                            <td class="text-center">○</td>
+                        </tr>
+                        <tr>
+                            <td>※総合作動</td>
+                            <td class="text-center">○</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="remarks">
+                    <ol>
+                        <li>この用紙の大きさは、日本産業規格A4とすること。</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- その4 -->
+            <div class="a4-sheet" id="sheet-4">
+                <div>
+                    <div class="doc-title-area">
+                        <div class="form-id">別記様式第11</div>
+                        <div class="page-id">(その4)</div>
+                        <div class="doc-title">自動火災報知設備点検票</div>
+                    </div>
+                    <table class="official-table" style="margin-top: 15px; font-size: 8pt;">
+                        <tr>
+                            <td rowspan="2" class="text-center" style="width: 8%;">番号</td>
+                            <td rowspan="2" class="text-center" style="width: 22%;">名 称</td>
+                            <td colspan="4" class="text-center">感知器数量 (階別・部屋別)</td>
+                            <td colspan="2" class="text-center" style="width: 15%;">地区音響装置</td>
+                        </tr>
+                        <tr>
+                            <td class="text-center">差動スポット型</td>
+                            <td class="text-center">定温スポット型</td>
+                            <td class="text-center">煙スポット型</td>
+                            <td class="text-center">その他</td>
+                            <td class="text-center">発信機</td>
+                            <td class="text-center">音響</td>
+                        </tr>
+                        <tr>
+                            <td class="text-center">1</td>
+                            <td>1F</td>
+                            <td class="text-center"><span id="o-r1-diff">1</span></td>
+                            <td class="text-center"><span id="o-r1-heat">1</span></td>
+                            <td class="text-center"></td>
+                            <td class="text-center"></td>
+                            <td class="text-center">1</td>
+                            <td class="text-center">1</td>
+                        </tr>
+                        <tr>
+                            <td class="text-center">2</td>
+                            <td>2F</td>
+                            <td class="text-center"><span id="o-r2-diff">10</span></td>
+                            <td class="text-center"><span id="o-r2-heat">5</span></td>
+                            <td class="text-center"></td>
+                            <td class="text-center"></td>
+                            <td class="text-center">1</td>
+                            <td class="text-center">1</td>
+                        </tr>
+                        <tr>
+                            <td class="text-center">3</td>
+                            <td>3F</td>
+                            <td class="text-center"><span id="o-r3-diff">10</span></td>
+                            <td class="text-center"><span id="o-r3-heat">5</span></td>
+                            <td class="text-center"></td>
+                            <td class="text-center"></td>
+                            <td class="text-center">1</td>
+                            <td class="text-center">1</td>
+                        </tr>
+                        <tr>
+                            <td colspan="8" style="padding: 6px;">
+                                <div style="font-weight:bold; font-size:8.5pt; margin-bottom:4px;">【部屋別内訳メモ】</div>
+                                <div id="o-rooms-detail" style="white-space: pre-wrap; font-size: 8pt; line-height: 1.4;"></div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="remarks">
+                    <ol>
+                        <li>この用紙の大きさは、日本産業規格A4とすること。</li>
+                        <li>受信機の表示番号又は警戒区域図ごとに個数を記入すること。</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- 配線点検票 -->
+            <div class="a4-sheet" id="sheet-w">
+                <div>
+                    <div class="doc-title-area">
+                        <div class="form-id">別記様式第26</div>
+                        <div class="doc-title">配 線 点 検 票（自動火災報知設備）</div>
+                    </div>
+                    <table class="official-table" style="margin-top: 10px;">
+                        <tr>
+                            <td class="text-center" style="width: 15%;">名 称</td>
+                            <td colspan="3"><span id="pw-name">〇〇マンション</span></td>
+                            <td class="text-center" style="width: 15%;">防火管理者</td>
+                            <td style="width: 20%;"></td>
+                        </tr>
+                        <tr>
+                            <td class="text-center">所 在</td>
+                            <td colspan="3"><span id="pw-location">東京都新宿区西新宿X-X-X</span></td>
+                            <td class="text-center">立会者</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td class="text-center">点検種別</td>
+                            <td>総合点検</td>
+                            <td class="text-center">点検年月日</td>
+                            <td colspan="3"><span id="pw-date">令和6年8月6日</span></td>
+                        </tr>
+                        <tr>
+                            <td class="text-center" rowspan="2">点検者</td>
+                            <td colspan="3">資格 <span id="pw-qual">第2種</span> 番号 <span id="pw-qual-no">250101530</span></td>
+                            <td class="text-center">社名</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="3">氏名 <span id="pw-inspector">田端 祐希</span></td>
+                            <td class="text-center">TEL</td>
+                            <td></td>
+                        </tr>
+                    </table>
+
+                    <table class="official-table" style="margin-top: 10px;">
+                        <tr>
+                            <td class="text-center" style="width: 25%; font-weight:bold;">点検項目</td>
+                            <td class="text-center" style="width: 35%; font-weight:bold;">種別・容量等の内容</td>
+                            <td class="text-center" style="width: 10%; font-weight:bold;">判定</td>
+                            <td class="text-center" style="width: 30%; font-weight:bold;">不良内容・措置内容</td>
+                        </tr>
+                        <tr>
+                            <td>専用回路</td>
+                            <td><span id="pw-circuit">1階分電盤</span></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>開閉器・遮断器</td>
+                            <td><span id="pw-breaker">NFB-20A</span></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>ヒューズ類</td>
+                            <td></td>
+                            <td class="text-center">/</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>絶縁抵抗</td>
+                            <td>常用 <span id="pw-ins-normal">70</span> MΩ / 非常 <span id="pw-ins-emergency">50</span> MΩ</td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>耐熱保護</td>
+                            <td></td>
+                            <td class="text-center">○</td>
+                            <td></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="remarks">
+                    <ol>
+                        <li>この用紙の大きさは、日本産業規格A4とすること。</li>
+                        <li>判定欄は、正常の場合は○印、不良の場合は×印を記入すること。</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(evt, tabId) {
+            document.querySelectorAll('.form-section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            evt.currentTarget.classList.add('active');
+        }
+
+        function loadSampleData() {
+            document.getElementById('f-name').value = "〇〇マンション";
+            document.getElementById('f-location').value = "東京都新宿区西新宿X-X-X";
+            document.getElementById('f-date').value = "令和6年8月6日";
+            document.getElementById('f-qual').value = "第2種";
+            document.getElementById('f-qual-no').value = "250101530";
+            document.getElementById('f-inspector').value = "田端 祐希";
+            
+            document.getElementById('f-rcv-maker').value = "パナソニック株式会社";
+            document.getElementById('f-rcv-model').value = "受第8〜3号 P-2 3/5回線 1997年製";
+            document.getElementById('f-bat-form').value = "24V 0.29Ah";
+            document.getElementById('f-bat-eval').value = "品評特 24〜4号";
+            document.getElementById('f-volt').value = "良 26.4 V";
+            document.getElementById('f-env').value = "1階エントランス";
+            document.getElementById('f-fuse').value = "0.5, 1, 2 A";
+            
+            document.getElementById('f-sound-cond').value = "総合盤内組立";
+            document.getElementById('f-sound-pres').value = "92dB以上";
+            document.getElementById('f-sound-type').value = "一斉 区分 相互 再鳴動";
+            
+            document.getElementById('f-r1-diff').value = "1";
+            document.getElementById('f-r1-heat').value = "1";
+            document.getElementById('f-r2-diff').value = "10";
+            document.getElementById('f-r2-heat').value = "5";
+            document.getElementById('f-r3-diff').value = "10";
+            document.getElementById('f-r3-heat').value = "5";
+            
+            document.getElementById('f-rooms-detail').value = `201: 差動2, 定温2
+202: 差動2, 定温1 (カーテン間切り)
+203: 差動2, 定温1
+204: 差動2, 定温1
+205: 差動2, 定温2
+301: 差動2, 定温2
+302: 差動2, 定温2
+303: 差動2, 定温1
+304: 差動2, 定温1 (カーテン)
+305: 差動2, 定温2
+101: 差動1, 定温1`;
+
+            document.getElementById('f-w-circuit').value = "1階分電盤";
+            document.getElementById('f-w-breaker').value = "NFB-20A";
+            document.getElementById('f-w-ins-normal').value = "70";
+            document.getElementById('f-w-ins-emergency').value = "50";
+
+            updatePreview();
+            alert("手書きデータのサンプル読み込みが完了しました！");
+        }
+
+        function updatePreview() {
+            // 基本情報
+            const name = document.getElementById('f-name').value;
+            const location = document.getElementById('f-location').value;
+            const fireMgr = document.getElementById('f-fire-mgr').value;
+            const witness = document.getElementById('f-witness').value;
+            const date = document.getElementById('f-date').value;
+            const qual = document.getElementById('f-qual').value;
+            const qualNo = document.getElementById('f-qual-no').value;
+            const inspector = document.getElementById('f-inspector').value;
+            const company = document.getElementById('f-company').value;
+            const tel = document.getElementById('f-tel').value;
+
+            document.getElementById('p-name').innerText = name;
+            document.getElementById('p-location').innerText = location;
+            document.getElementById('p-fire-mgr').innerText = fireMgr;
+            document.getElementById('p-witness').innerText = witness;
+            document.getElementById('p-date').innerText = date;
+            document.getElementById('p-qual').innerText = qual;
+            document.getElementById('p-qual-no').innerText = qualNo;
+            document.getElementById('p-inspector').innerText = inspector;
+            document.getElementById('p-company').innerText = company;
+            document.getElementById('p-tel').innerText = tel;
+
+            document.getElementById('pw-name').innerText = name;
+            document.getElementById('pw-location').innerText = location;
+            document.getElementById('pw-date').innerText = date;
+            document.getElementById('pw-qual').innerText = qual;
+            document.getElementById('pw-qual-no').innerText = qualNo;
+            document.getElementById('pw-inspector').innerText = inspector;
+
+            // 受信機情報
+            document.getElementById('p-rcv-maker').innerText = document.getElementById('f-rcv-maker').value;
+            document.getElementById('p-rcv-model').innerText = document.getElementById('f-rcv-model').value;
+            document.getElementById('p-bat-form').innerText = document.getElementById('f-bat-form').value;
+            document.getElementById('p-bat-eval').innerText = document.getElementById('f-bat-eval').value;
+            document.getElementById('p-volt').innerText = document.getElementById('f-volt').value;
+            document.getElementById('p-env').innerText = document.getElementById('f-env').value;
+            document.getElementById('p-fuse').innerText = document.getElementById('f-fuse').value;
+
+            // 区域・数量
+            document.getElementById('o-r1-diff').innerText = document.getElementById('f-r1-diff').value;
+            document.getElementById('o-r1-heat').innerText = document.getElementById('f-r1-heat').value;
+            document.getElementById('o-r2-diff').innerText = document.getElementById('f-r2-diff').value;
+            document.getElementById('o-r2-heat').innerText = document.getElementById('f-r2-heat').value;
+            document.getElementById('o-r3-diff').innerText = document.getElementById('f-r3-diff').value;
+            document.getElementById('o-r3-heat').innerText = document.getElementById('f-r3-heat').value;
+            document.getElementById('o-rooms-detail').innerText = document.getElementById('f-rooms-detail').value;
+
+            // 配線点検票
+            document.getElementById('pw-circuit').innerText = document.getElementById('f-w-circuit').value;
+            document.getElementById('pw-breaker').innerText = document.getElementById('f-w-breaker').value;
+            document.getElementById('pw-ins-normal').innerText = document.getElementById('f-w-ins-normal').value;
+            document.getElementById('pw-ins-emergency').innerText = document.getElementById('f-w-ins-emergency').value;
+        }
+
+        // 初期ロード時にサンプルを反映
+        window.onload = function() {
+            loadSampleData();
+        };
+    </script>
+</body>
+</html>
