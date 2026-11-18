@@ -8,7 +8,6 @@
             --primary: #1e3a8a;
             --secondary: #3b82f6;
             --bg-color: #f1f5f9;
-            --border-color: #000;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: "MS Mincho", "Hiragino Mincho ProN", serif; }
         body { background: var(--bg-color); color: #000; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -21,8 +20,6 @@
         .btn:hover { background: #2563eb; }
         .btn-success { background: #059669; }
         .btn-success:hover { background: #047857; }
-        .btn-danger { background: #dc2626; }
-        .btn-danger:hover { background: #b91c1c; }
 
         /* Main Layout */
         .main-container { display: flex; flex: 1; overflow: hidden; }
@@ -46,28 +43,24 @@
         .preview-panel { flex: 1; background: #94a3b8; overflow-y: auto; padding: 30px; display: flex; flex-direction: column; align-items: center; }
         
         /* A4 Sheet Simulation */
-        .a4-sheet { background: white; width: 210mm; min-height: 297mm; padding: 15mm 15mm 15mm 15mm; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); position: relative; display: flex; flex-direction: column; justify-content: space-between; }
+        .a4-sheet { background: white; width: 210mm; min-height: 297mm; padding: 15mm; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); position: relative; display: flex; flex-direction: column; justify-content: space-between; }
         
         /* Official Table Styles */
         .doc-title-area { text-align: center; margin-bottom: 10px; position: relative; }
         .form-id { position: absolute; top: 0; left: 0; font-size: 9pt; }
         .page-id { position: absolute; top: 0; right: 0; font-size: 9pt; }
-        .doc-title { font-size: 14pt; font-weight: bold; letter-spacing: 2mm; margin-top: 5px; }
+        .doc-title { font-size: 13pt; font-weight: bold; letter-spacing: 1.5mm; margin-top: 5px; }
 
-        table.official-table { width: 100%; border-collapse: collapse; border: 1.5px solid #000; font-size: 9pt; table-layout: fixed; }
+        table.official-table { width: 100%; border-collapse: collapse; border: 1.5px solid #000; font-size: 8.5pt; table-layout: fixed; }
         table.official-table th, table.official-table td { border: 1px solid #000; padding: 2px 4px; overflow: hidden; word-break: break-all; vertical-align: middle; }
         
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        .vertical-text { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 1px; margin: 0 auto; font-size: 8.5pt; }
+        .vertical-text { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 1px; margin: 0 auto; font-size: 8pt; }
 
         /* Remarks */
         .remarks { font-size: 7.5pt; margin-top: 8px; line-height: 1.3; font-family: sans-serif; }
         .remarks ol { padding-left: 15px; }
-
-        /* Modal / Helper */
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: white; padding: 20px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
 
         @media print {
             body { background: white; overflow: visible; height: auto; }
@@ -221,7 +214,6 @@
                 <!-- その3タブ：総合点検 -->
                 <div id="tab-s3" class="form-section">
                     <div class="section-title">総合点検・自動試験</div>
-                    <p style="font-size:0.85rem; color:#64748b; margin-bottom:10px;">自動試験機能および総合作動の判定項目はチェック（○）が基本です。</p>
                     <div class="form-group">
                         <label>備考・特記事項</label>
                         <textarea id="f-s3-remark" class="form-control" rows="4" oninput="updatePreview()"></textarea>
@@ -231,7 +223,6 @@
                 <!-- その4タブ：警戒区域・部屋別数量 -->
                 <div id="tab-s4" class="form-section">
                     <div class="section-title">警戒区域・感知器数量内訳</div>
-                    <p style="font-size:0.85rem; color:#64748b; margin-bottom:10px;">各階・各号室の感知器数を入力してください。</p>
                     <div class="form-group">
                         <label>1階 数量 (差動 / 定温)</label>
                         <div class="form-row">
@@ -304,7 +295,7 @@
                         <div class="page-id">(その1)</div>
                         <div class="doc-title">自動火災報知設備点検票</div>
                     </div>
-                    <table class="official-table" style="margin-top: 10px;">
+                    <table class="official-table">
                         <colgroup>
                             <col style="width: 10%;">
                             <col style="width: 23%;">
@@ -350,14 +341,14 @@
                         </tr>
                     </table>
 
-                    <table class="official-table" style="margin-top: 5px;">
+                    <table class="official-table" style="margin-top: 4px;">
                         <colgroup>
                             <col style="width: 5%;">
                             <col style="width: 5%;">
                             <col style="width: 20%;">
-                            <col style="width: 20%;">
-                            <col style="width: 8%;">
                             <col style="width: 22%;">
+                            <col style="width: 8%;">
+                            <col style="width: 20%;">
                             <col style="width: 20%;">
                         </colgroup>
                         <tr>
@@ -368,7 +359,7 @@
                             <td class="text-center" style="font-weight:bold;">措 置 内 容</td>
                         </tr>
                         <tr>
-                            <td rowspan="8" class="text-center"><div class="vertical-text">予備電源・非常電源</div></td>
+                            <td rowspan="7" class="text-center"><div class="vertical-text">予備電源・非常電源</div></td>
                             <td colspan="2">外形</td>
                             <td><span id="p-bat-form">24V 0.29Ah</span></td>
                             <td class="text-center">○</td>
@@ -418,6 +409,7 @@
                             <td></td>
                         </tr>
                         <tr>
+                            <td rowspan="17" class="text-center"><div class="vertical-text">受信機・中継器</div></td>
                             <td colspan="2">外形・表示</td>
                             <td>P-2 埋込型</td>
                             <td class="text-center">○</td>
@@ -425,7 +417,6 @@
                             <td></td>
                         </tr>
                         <tr>
-                            <td rowspan="19" class="text-center"><div class="vertical-text">受信機・中継器</div></td>
                             <td colspan="2">警戒区域の表示装置</td>
                             <td></td>
                             <td class="text-center">○</td>
@@ -433,7 +424,7 @@
                             <td></td>
                         </tr>
                         <tr>
-                            <td colspan="2">電 圧 計</td>
+                            <td colspan="2">電圧計</td>
                             <td>「交流電源」灯 V</td>
                             <td class="text-center">○</td>
                             <td></td>
@@ -538,27 +529,6 @@
                             <td></td>
                             <td></td>
                         </tr>
-                        <tr>
-                            <td colspan="2">設定表示温度等</td>
-                            <td></td>
-                            <td class="text-center">/</td>
-                            <td></td>
-                            <td></td>
-                        </tr>
-                        <tr>
-                            <td colspan="2">感知器作動等の表示</td>
-                            <td></td>
-                            <td class="text-center">/</td>
-                            <td></td>
-                            <td></td>
-                        </tr>
-                        <tr>
-                            <td colspan="2">予 備 品 等</td>
-                            <td>ヒューズ等</td>
-                            <td class="text-center">○</td>
-                            <td></td>
-                            <td></td>
-                        </tr>
                     </table>
                 </div>
                 <div class="remarks">
@@ -578,7 +548,7 @@
                         <div class="page-id">(その2)</div>
                         <div class="doc-title">自動火災報知設備点検票</div>
                     </div>
-                    <table class="official-table" style="margin-top: 15px;">
+                    <table class="official-table" style="margin-top: 10px;">
                         <colgroup>
                             <col style="width: 5%;">
                             <col style="width: 25%;">
@@ -651,19 +621,19 @@
                         <tr>
                             <td rowspan="3" class="text-center"><div class="vertical-text">音 響 装 置</div></td>
                             <td>取付状態</td>
-                            <td>総合盤内組立</td>
+                            <td><span id="p-sound-cond">総合盤内組立</span></td>
                             <td class="text-center">○</td>
                             <td></td>
                         </tr>
                         <tr>
                             <td>音圧等</td>
-                            <td>92dB以上</td>
+                            <td><span id="p-sound-pres">92dB以上</span></td>
                             <td class="text-center">○</td>
                             <td></td>
                         </tr>
                         <tr>
                             <td>鳴動方式</td>
-                            <td>一斉 区分 相互 再鳴動</td>
+                            <td><span id="p-sound-type">一斉 区分 相互 再鳴動</span></td>
                             <td class="text-center">○</td>
                             <td></td>
                         </tr>
@@ -685,7 +655,7 @@
                         <div class="page-id">(その3)</div>
                         <div class="doc-title">自動火災報知設備点検票</div>
                     </div>
-                    <table class="official-table" style="margin-top: 15px;">
+                    <table class="official-table" style="margin-top: 10px;">
                         <colgroup>
                             <col style="width: 35%;">
                             <col style="width: 45%;">
@@ -754,7 +724,7 @@
                         <div class="page-id">(その4)</div>
                         <div class="doc-title">自動火災報知設備点検票</div>
                     </div>
-                    <table class="official-table" style="margin-top: 15px; font-size: 8pt;">
+                    <table class="official-table" style="margin-top: 10px; font-size: 8pt;">
                         <tr>
                             <td rowspan="2" class="text-center" style="width: 8%;">番号</td>
                             <td rowspan="2" class="text-center" style="width: 22%;">名 称</td>
@@ -956,11 +926,9 @@
             document.getElementById('f-w-ins-emergency').value = "50";
 
             updatePreview();
-            alert("手書きデータのサンプル読み込みが完了しました！");
         }
 
         function updatePreview() {
-            // 基本情報
             const name = document.getElementById('f-name').value;
             const location = document.getElementById('f-location').value;
             const fireMgr = document.getElementById('f-fire-mgr').value;
@@ -990,7 +958,6 @@
             document.getElementById('pw-qual-no').innerText = qualNo;
             document.getElementById('pw-inspector').innerText = inspector;
 
-            // 受信機情報
             document.getElementById('p-rcv-maker').innerText = document.getElementById('f-rcv-maker').value;
             document.getElementById('p-rcv-model').innerText = document.getElementById('f-rcv-model').value;
             document.getElementById('p-bat-form').innerText = document.getElementById('f-bat-form').value;
@@ -999,7 +966,10 @@
             document.getElementById('p-env').innerText = document.getElementById('f-env').value;
             document.getElementById('p-fuse').innerText = document.getElementById('f-fuse').value;
 
-            // 区域・数量
+            document.getElementById('p-sound-cond').innerText = document.getElementById('f-sound-cond').value;
+            document.getElementById('p-sound-pres').innerText = document.getElementById('f-sound-pres').value;
+            document.getElementById('p-sound-type').innerText = document.getElementById('f-sound-type').value;
+
             document.getElementById('o-r1-diff').innerText = document.getElementById('f-r1-diff').value;
             document.getElementById('o-r1-heat').innerText = document.getElementById('f-r1-heat').value;
             document.getElementById('o-r2-diff').innerText = document.getElementById('f-r2-diff').value;
@@ -1008,14 +978,12 @@
             document.getElementById('o-r3-heat').innerText = document.getElementById('f-r3-heat').value;
             document.getElementById('o-rooms-detail').innerText = document.getElementById('f-rooms-detail').value;
 
-            // 配線点検票
             document.getElementById('pw-circuit').innerText = document.getElementById('f-w-circuit').value;
             document.getElementById('pw-breaker').innerText = document.getElementById('f-w-breaker').value;
             document.getElementById('pw-ins-normal').innerText = document.getElementById('f-w-ins-normal').value;
             document.getElementById('pw-ins-emergency').innerText = document.getElementById('f-w-ins-emergency').value;
         }
 
-        // 初期ロード時にサンプルを反映
         window.onload = function() {
             loadSampleData();
         };
