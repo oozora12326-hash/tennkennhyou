@@ -3,10 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>自動火災報知設備点検票 清書アプリ（様式11・枚数連動＆自動判別版）</title>
+  <title>自動火災報知設備点検票 清書アプリ（様式11）</title>
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   <script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
-  <!-- APIキー不要のブラウザ内OCRライブラリ -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     :root {
@@ -178,7 +177,6 @@
       color: #991b1b;
     }
 
-    /* 清書ページタブ */
     .page-tabs {
       display: flex;
       flex-wrap: wrap;
@@ -267,12 +265,24 @@
       flex-direction: column;
       gap: 10px;
     }
+    .preview-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 0.82rem;
+    }
     .preview-pane iframe {
       width: 100%;
-      height: 72vh;
+      height: 70vh;
       border: 1px solid var(--border);
       border-radius: 8px;
-      background: #525659;
+      background: #ffffff;
     }
     @media (max-width: 980px) {
       .workspace { grid-template-columns: 1fr; }
@@ -290,7 +300,6 @@
   </header>
 
   <div class="container">
-    <!-- STEP 1: 手書きデータ追加＆OCR -->
     <section class="card">
       <div class="card-header">
         <div>
@@ -313,11 +322,11 @@
           <div class="form-group">
             <label for="templatePdfFile">公式PDFテンプレート（様式11・複数ページ対応）</label>
             <input type="file" id="templatePdfFile" accept="application/pdf" onchange="handleTemplatePdfChange()" />
-            <span class="hint">未選択時は同階層の <code>template_11.pdf</code> を自動読み込みします</span>
+            <span class="hint">未選択時は同階層の <code>template_11.pdf</code> を自動読み込みします（日本語フォントも自動取得）</span>
             <div id="templatePdfInfo" class="file-list">公式PDF情報：未読み込み</div>
           </div>
           <div class="btn-row">
-            <button id="btnOcr" onclick="runTesseractOcrAll()">選択した全画像をOCR＆自動判別</button>
+            <button id="btnOcr" type="button" onclick="runTesseractOcrAll()">選択した全画像をOCR＆自動判別</button>
             <button type="button" class="secondary" onclick="loadSampleData()">サンプル値で試す</button>
             <button type="button" class="outline" onclick="clearCurrentPageFields()">現在の清書ページをクリア</button>
           </div>
@@ -325,11 +334,10 @@
       </div>
 
       <div id="statusBar" class="status-bar">
-        準備完了。手書き画像を複数枚選ぶと枚数分の清書ページが作られ、OCRで「その1」「その2」等を自動判別します。
+        画面初期化中...
       </div>
     </section>
 
-    <!-- STEP 2 & STEP 3: 清書ページごとの編集＆PDF保存 -->
     <section class="card">
       <div class="card-header">
         <div>
@@ -342,10 +350,8 @@
         </div>
       </div>
 
-      <!-- 手書きデータ枚数分の清書ページ切り替えタブ -->
       <div id="pageTabs" class="page-tabs"></div>
 
-      <!-- 選択中清書ページの判別情報＆PDF描画設定 -->
       <div class="page-meta-bar">
         <div class="form-group" style="margin-bottom: 0;">
           <label for="detectedSonoLabel">自動判別された様式表記</label>
@@ -368,11 +374,13 @@
       </div>
 
       <div class="workspace">
-        <!-- 左：選択中清書ページのOCR生テキスト＆編集フォーム -->
         <div class="editor-pane" id="editorContainer"></div>
 
-        <!-- 右：PDFプレビュー -->
         <div class="preview-pane">
+          <div class="preview-toolbar">
+            <span>プレビューが表示されない場合は「別タブで開く」をお試しください</span>
+            <button type="button" class="outline" onclick="openPdfInNewTab()">別タブでPDFプレビューを開く</button>
+          </div>
           <iframe id="pdfPreviewFrame" title="清書済みPDFプレビュー"></iframe>
         </div>
       </div>
@@ -380,9 +388,7 @@
   </div>
 
   <script>
-    // 日本消防設備安全センター「点検票 様式11 自動火災報知設備」向けフィールド定義
     const FIELD_DEFINITIONS = [
-      // 基本情報
       { key: "building_name", label: "名称", section: "基本情報", x: 130, y: 745, size: 9.5, type: "text", keywords: ["名称"] },
       { key: "building_address", label: "所在", section: "基本情報", x: 130, y: 727, size: 9.5, type: "text", keywords: ["所在"] },
       { key: "fire_manager", label: "防火管理者", section: "基本情報", x: 435, y: 745, size: 9, type: "text", keywords: ["防火管理者"] },
@@ -393,12 +399,10 @@
       { key: "inspector_company", label: "点検者 所属会社・TEL", section: "基本情報", x: 290, y: 690, size: 8.5, type: "text", keywords: ["社名", "TEL"] },
       { key: "inspector_address", label: "点検者 住所", section: "基本情報", x: 290, y: 672, size: 8.5, type: "text", keywords: ["住所"] },
 
-      // 点検設備名（受信機）
       { key: "receiver_maker", label: "製造者名", section: "点検設備名（受信機）", x: 275, y: 653, size: 9, type: "text", keywords: ["製造者名", "松下", "BVJ"] },
       { key: "receiver_model", label: "型式等", section: "点検設備名（受信機）", x: 275, y: 639, size: 9, type: "text", keywords: ["型式等", "受第", "回線"] },
       { key: "receiver_year", label: "製造年", section: "点検設備名（受信機）", x: 470, y: 639, size: 9, type: "text", keywords: ["年製"] },
 
-      // 予備電源・非常電源（内蔵型）
       { key: "battery_shape_val", label: "外形（内容）", section: "予備電源・非常電源", x: 240, y: 593, size: 8.5, type: "text", keywords: ["Ah", "外形"] },
       { key: "battery_shape_judge", label: "外形（判定）", section: "予備電源・非常電源", x: 348, y: 593, size: 9, type: "judge", keywords: [] },
       { key: "battery_label_val", label: "表示（内容）", section: "予備電源・非常電源", x: 240, y: 579, size: 8.5, type: "text", keywords: ["品評"] },
@@ -412,7 +416,6 @@
       { key: "battery_wire_val", label: "※結線接続（内容）", section: "予備電源・非常電源", x: 240, y: 523, size: 8.5, type: "text", keywords: ["コネクター", "結線接続"] },
       { key: "battery_wire_judge", label: "※結線接続（判定）", section: "予備電源・非常電源", x: 348, y: 523, size: 9, type: "judge", keywords: [] },
 
-      // 受信機・中継器
       { key: "env_val", label: "周囲の状況（内容）", section: "受信機・中継器", x: 240, y: 509, size: 8.5, type: "text", keywords: ["周囲の状況", "エントランス"] },
       { key: "env_judge", label: "周囲の状況（判定）", section: "受信機・中継器", x: 348, y: 509, size: 9, type: "judge", keywords: [] },
       { key: "body_shape_val", label: "外形（内容）", section: "受信機・中継器", x: 240, y: 495, size: 8.5, type: "text", keywords: ["埋込型", "壁掛型", "P-2"] },
@@ -436,7 +439,6 @@
       { key: "accessory_val", label: "附属装置（内容）", section: "受信機・中継器", x: 240, y: 341, size: 8.5, type: "text", keywords: ["附属装置"] },
       { key: "accessory_judge", label: "附属装置（判定）", section: "受信機・中継器", x: 348, y: 341, size: 9, type: "judge", keywords: [] },
 
-      // ※火災表示等・その他
       { key: "fire_disp_accum_judge", label: "火災表示等：蓄積式（判定）", section: "火災表示等・その他", x: 348, y: 327, size: 9, type: "judge", keywords: [] },
       { key: "fire_disp_analog_judge", label: "火災表示等：アナログ式（判定）", section: "火災表示等・その他", x: 348, y: 313, size: 9, type: "judge", keywords: [] },
       { key: "fire_disp_two_judge", label: "火災表示等：二信号式（判定）", section: "火災表示等・その他", x: 348, y: 299, size: 9, type: "judge", keywords: [] },
@@ -456,7 +458,6 @@
       return obj;
     }
 
-    // 手書きデータの枚数分の清書ページ配列
     let cleanPages = [
       {
         sourceIndex: 0,
@@ -471,17 +472,34 @@
     ];
     let activeCleanPageIdx = 0;
     let latestPdfBytes = null;
+    let latestPreviewBlobUrl = null;
     let cachedFontBytes = null;
+    let cachedFontSource = "";
     let totalTemplatePages = 1;
 
-    window.addEventListener("DOMContentLoaded", () => {
-      buildEditorFormSkeleton();
-      renderPageTabs();
-      loadCleanPageToUi(0);
+    window.addEventListener("DOMContentLoaded", async () => {
+      try {
+        buildEditorFormSkeleton();
+        renderPageTabs();
+        loadCleanPageToUi(0);
+        const libOk = typeof window.PDFLib !== "undefined";
+        setStatus(
+          libOk
+            ? "準備完了。日本語フォントを自動取得して描画します。"
+            : "PDFライブラリ（pdf-lib）の読み込みを確認中。通信環境をご確認ください。",
+          !libOk
+        );
+        if (libOk) {
+          await getJapaneseFontBytes();
+        }
+      } catch (err) {
+        setStatus(`初期化エラー: ${err.message}`, true);
+      }
     });
 
     function setStatus(message, isError = false) {
       const bar = document.getElementById("statusBar");
+      if (!bar) return;
       bar.textContent = message;
       bar.className = isError ? "status-bar error" : "status-bar";
     }
@@ -494,50 +512,41 @@
         .replace(/"/g, "&quot;");
     }
 
-    // 「その1」「（その2）」「その3」「その一」「その１」などを自動判別
     function detectSonoPageNumber(text, fileName = "") {
       const combined = `${text || ""}\n${fileName || ""}`;
       const kanjiMap = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10 };
 
-      // アラビア数字（半角・全角）
       const numMatch = combined.match(/その\s*([0-9０-９]+)/);
       if (numMatch) {
         const half = numMatch[1].replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
         const num = parseInt(half, 10);
-        if (num > 0) {
-          return { pageNum: num, label: `その${num}` };
-        }
+        if (num > 0) return { pageNum: num, label: `その${num}` };
       }
 
-      // 漢数字
       const kanjiMatch = combined.match(/その\s*([一二三四五六七八九十]+)/);
       if (kanjiMatch && kanjiMap[kanjiMatch[1]]) {
         const num = kanjiMap[kanjiMatch[1]];
         return { pageNum: num, label: `その${num}` };
       }
-
       return null;
     }
 
-    // 手書きファイル選択時：枚数分の清書ページを生成
     function handleHandwrittenFilesChange() {
       const files = Array.from(document.getElementById("handwrittenFile").files || []);
       const listEl = document.getElementById("selectedFileList");
 
       if (!files.length) {
         listEl.textContent = "選択中のファイル：なし（清書ページ：1ページ分待機中）";
-        cleanPages = [
-          {
-            sourceIndex: 0,
-            sourceName: "（手書き未選択・1枚目）",
-            detectedSono: "",
-            targetPdfPage: 1,
-            offsetX: 0,
-            offsetY: 0,
-            rawOcrText: "",
-            fields: createEmptyFields()
-          }
-        ];
+        cleanPages = [{
+          sourceIndex: 0,
+          sourceName: "（手書き未選択・1枚目）",
+          detectedSono: "",
+          targetPdfPage: 1,
+          offsetX: 0,
+          offsetY: 0,
+          rawOcrText: "",
+          fields: createEmptyFields()
+        }];
         activeCleanPageIdx = 0;
         renderPageTabs();
         loadCleanPageToUi(0);
@@ -618,11 +627,7 @@
       saveCurrentUiToCleanPage();
       loadCleanPageToUi(idx);
       renderPageTabs();
-      if (latestPdfBytes) {
-        const blob = new Blob([latestPdfBytes], { type: "application/pdf" });
-        const url = URL.createObjectURL(blob);
-        document.getElementById("pdfPreviewFrame").src = `${url}#page=${cleanPages[activeCleanPageIdx].targetPdfPage}`;
-      }
+      updateIframeSrc();
     }
 
     function onTargetPdfPageChange() {
@@ -652,7 +657,7 @@
     }
 
     async function inspectTemplatePdfPages(pdfBytes) {
-      const { PDFDocument } = PDFLib;
+      const { PDFDocument } = window.PDFLib;
       const pdfDoc = await PDFDocument.load(pdfBytes);
       const pages = pdfDoc.getPages();
       totalTemplatePages = pages.length;
@@ -672,6 +677,10 @@
     async function handleTemplatePdfChange() {
       try {
         const pdfBytes = await getTemplatePdfArrayBuffer();
+        if (!pdfBytes) {
+          setStatus("公式PDFが選択されていません。", true);
+          return;
+        }
         await inspectTemplatePdfPages(pdfBytes);
         setStatus(`公式PDF（全${totalTemplatePages}ページ）を読み込みました。`);
         await renderPreviewPdf();
@@ -736,8 +745,12 @@
       });
     }
 
-    // 選択した全手書き画像を1枚ずつOCRし、各枚数の清書ページへ自動判別・格納
     async function runTesseractOcrAll() {
+      if (typeof window.Tesseract === "undefined") {
+        setStatus("OCRライブラリ（Tesseract.js）が読み込まれていません。ネット接続を確認してください。", true);
+        return;
+      }
+
       const files = Array.from(document.getElementById("handwrittenFile").files || []);
       const btn = document.getElementById("btnOcr");
 
@@ -745,19 +758,17 @@
         setStatus("OCRする手書き画像を1枚以上選択してください。", true);
         return;
       }
-
       if (cleanPages.length !== files.length) {
         handleHandwrittenFilesChange();
       }
 
       btn.disabled = true;
-
       try {
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
           setStatus(`OCR解析中...（${i + 1} / ${files.length}枚目：${file.name}）`);
 
-          const result = await Tesseract.recognize(file, "jpn+eng", {
+          const result = await window.Tesseract.recognize(file, "jpn+eng", {
             logger: (m) => {
               if (m.status === "recognizing text" && typeof m.progress === "number") {
                 const pct = Math.round(m.progress * 100);
@@ -778,13 +789,12 @@
             page.detectedSono = "";
             page.targetPdfPage = i + 1;
           }
-
           guessFieldsFromText(text, page.fields);
         }
 
         renderPageTabs();
         loadCleanPageToUi(activeCleanPageIdx);
-        setStatus(`${files.length}枚すべてのOCRと「その○」判別が完了しました。タブを切り替えて各清書ページを確認・修正できます。`);
+        setStatus(`${files.length}枚すべてのOCRと「その○」判別が完了しました。`);
         await renderPreviewPdf();
       } catch (err) {
         console.error(err);
@@ -808,9 +818,7 @@
         const matchedLine = lines.find((line) =>
           field.keywords.some((kw) => kw && line.includes(kw))
         );
-        if (matchedLine) {
-          targetFields[field.key] = matchedLine;
-        }
+        if (matchedLine) targetFields[field.key] = matchedLine;
       });
     }
 
@@ -838,7 +846,6 @@
     }
 
     async function loadSampleData() {
-      // 複数枚（1枚目＝その1、2枚目＝その2）のサンプルを作成
       cleanPages = [
         {
           sourceIndex: 0,
@@ -898,7 +905,7 @@
       activeCleanPageIdx = 0;
       renderPageTabs();
       loadCleanPageToUi(0);
-      setStatus("2枚分（その1・その2）のサンプルデータを反映しました。タブを切り替えて確認できます。");
+      setStatus("2枚分（その1・その2）のサンプルデータを反映しました。日本語フォント自動取得＆PDFプレビューを生成中...");
       await renderPreviewPdf();
     }
 
@@ -906,51 +913,108 @@
       if (cachedFontBytes) return cachedFontBytes;
 
       const candidates = [
-        "./NotoSansJP-Regular.ttf",
-        "https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf",
-        "https://github.com/google/fonts/raw/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf"
+        { url: "./NotoSansJP-Regular.ttf", label: "ローカル NotoSansJP-Regular.ttf" },
+        { url: "https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf", label: "jsDelivr NotoSansCJKjp" },
+        { url: "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf", label: "GitHub NotoSansJP" },
+        { url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf", label: "jsDelivr GoogleFonts NotoSansJP" }
       ];
 
-      for (const url of candidates) {
+      for (const item of candidates) {
         try {
-          const res = await fetch(url);
+          const res = await fetch(item.url);
           if (res.ok) {
             const buf = await res.arrayBuffer();
             if (buf.byteLength > 10000) {
               cachedFontBytes = buf;
+              cachedFontSource = item.label;
               return cachedFontBytes;
             }
           }
         } catch (_) {}
       }
-      throw new Error("日本語フォントを読み込めませんでした。同フォルダに NotoSansJP-Regular.ttf を配置してください。");
+      return null;
     }
 
     async function getTemplatePdfArrayBuffer() {
       const fileInput = document.getElementById("templatePdfFile");
-      if (fileInput.files.length > 0) {
+      if (fileInput.files && fileInput.files.length > 0) {
         return await fileInput.files[0].arrayBuffer();
       }
-      const res = await fetch("./template_11.pdf");
-      if (!res.ok) {
-        throw new Error("公式PDF（template_11.pdf）が見つかりません。画面からPDFを選択するか、リポジトリに配置してください。");
-      }
-      return await res.arrayBuffer();
+      try {
+        const res = await fetch("./template_11.pdf");
+        if (res.ok) {
+          return await res.arrayBuffer();
+        }
+      } catch (_) {}
+      return null;
     }
 
-    // 全清書ページの内容を公式PDFの対応ページへ一括描画
+    async function createFallbackA4PdfDoc() {
+      const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([595.28, 841.89]);
+      const helv = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      page.drawText("Fire Alarm Inspection Form Preview (A4 Fallback)", {
+        x: 40,
+        y: 800,
+        size: 11,
+        font: helv,
+        color: rgb(0.2, 0.2, 0.2)
+      });
+      return pdfDoc;
+    }
+
+    function updateIframeSrc() {
+      if (!latestPreviewBlobUrl) return;
+      const previewPage = Math.max(
+        1,
+        Math.min(totalTemplatePages, cleanPages[activeCleanPageIdx]?.targetPdfPage || 1)
+      );
+      const iframe = document.getElementById("pdfPreviewFrame");
+      iframe.src = `${latestPreviewBlobUrl}#page=${previewPage}`;
+    }
+
     async function renderPreviewPdf() {
       saveCurrentUiToCleanPage();
+      if (typeof window.PDFLib === "undefined") {
+        setStatus("PDFライブラリ（pdf-lib）が読み込まれていません。ネット接続を確認して再読み込みしてください。", true);
+        return false;
+      }
+
       try {
+        setStatus("日本語フォントを自動取得してPDFを生成中...");
         const [pdfBytes, fontBytes] = await Promise.all([
           getTemplatePdfArrayBuffer(),
           getJapaneseFontBytes()
         ]);
 
-        const pdfDoc = await inspectTemplatePdfPages(pdfBytes);
-        const { rgb } = PDFLib;
-        pdfDoc.registerFontkit(fontkit);
-        const jpFont = await pdfDoc.embedFont(fontBytes, { subset: true });
+        const { StandardFonts, rgb } = window.PDFLib;
+        let pdfDoc;
+        let usedFallbackTemplate = false;
+
+        if (pdfBytes) {
+          pdfDoc = await inspectTemplatePdfPages(pdfBytes);
+        } else {
+          pdfDoc = await createFallbackA4PdfDoc();
+          totalTemplatePages = pdfDoc.getPageCount();
+          syncTargetPdfPageSelect(cleanPages[activeCleanPageIdx]?.targetPdfPage || 1);
+          usedFallbackTemplate = true;
+        }
+
+        let drawFont;
+        let usedJapaneseFont = false;
+        if (fontBytes && window.fontkit) {
+          try {
+            pdfDoc.registerFontkit(window.fontkit);
+            drawFont = await pdfDoc.embedFont(fontBytes, { subset: true });
+            usedJapaneseFont = true;
+          } catch (fontErr) {
+            console.warn("フォント埋め込み失敗:", fontErr);
+            drawFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+          }
+        } else {
+          drawFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        }
 
         const pages = pdfDoc.getPages();
 
@@ -961,47 +1025,88 @@
           const oy = Number(cleanPage.offsetY) || 0;
 
           FIELD_DEFINITIONS.forEach((field) => {
-            const val = (cleanPage.fields[field.key] || "").trim();
-            if (!val) return;
-            targetPage.drawText(val, {
+            const rawVal = (cleanPage.fields[field.key] || "").trim();
+            if (!rawVal) return;
+            const safeVal = usedJapaneseFont ? rawVal : rawVal.replace(/[^\x20-\x7E]/g, "*");
+            targetPage.drawText(safeVal, {
               x: field.x + ox,
               y: field.y + oy,
               size: field.size,
-              font: jpFont,
+              font: drawFont,
               color: rgb(0, 0, 0)
             });
           });
         });
 
         latestPdfBytes = await pdfDoc.save();
+        const prevUrl = latestPreviewBlobUrl;
         const blob = new Blob([latestPdfBytes], { type: "application/pdf" });
-        const url = URL.createObjectURL(blob);
-        const currentTargetPage = cleanPages[activeCleanPageIdx]?.targetPdfPage || 1;
-        const previewPage = Math.max(1, Math.min(pages.length, currentTargetPage));
-        document.getElementById("pdfPreviewFrame").src = `${url}#page=${previewPage}`;
+        latestPreviewBlobUrl = URL.createObjectURL(blob);
+        updateIframeSrc();
+        if (prevUrl) {
+          setTimeout(() => URL.revokeObjectURL(prevUrl), 2000);
+        }
+
+        const notes = [];
+        if (usedFallbackTemplate) notes.push("公式PDF未選択のため仮A4台紙で表示中");
+        if (usedJapaneseFont) {
+          notes.push(`日本語フォント自動適用済（${cachedFontSource}）`);
+        } else {
+          notes.push("外部フォント未取得のため英数字のみ描画中（HTTP/GitHub Pagesまたは同階層にNotoSansJP-Regular.ttf配置で自動取得）");
+        }
+        setStatus(`PDFプレビューを更新しました（全${totalTemplatePages}ページ／${notes.join("・")}）。`);
+        return true;
       } catch (err) {
         console.error(err);
-        setStatus(`PDF合成エラー: ${err.message}`, true);
+        setStatus(`PDF生成エラー: ${err.message}`, true);
+        return false;
+      }
+    }
+
+    async function openPdfInNewTab() {
+      try {
+        if (!latestPreviewBlobUrl) {
+          const ok = await renderPreviewPdf();
+          if (!ok || !latestPreviewBlobUrl) return;
+        }
+        const previewPage = Math.max(
+          1,
+          Math.min(totalTemplatePages, cleanPages[activeCleanPageIdx]?.targetPdfPage || 1)
+        );
+        const win = window.open(`${latestPreviewBlobUrl}#page=${previewPage}`, "_blank");
+        if (!win) {
+          setStatus("ポップアップがブロックされました。ブラウザのポップアップ許可を確認するか、ダウンロード保存をお試しください。", true);
+        } else {
+          setStatus("別タブでPDFプレビューを開きました。");
+        }
+      } catch (err) {
+        console.error(err);
+        setStatus(`別タブ表示エラー: ${err.message}`, true);
       }
     }
 
     async function downloadFinalPdf() {
-      if (!latestPdfBytes) {
-        await renderPreviewPdf();
-      }
-      if (!latestPdfBytes) return;
+      try {
+        if (!latestPdfBytes) {
+          const ok = await renderPreviewPdf();
+          if (!ok || !latestPdfBytes) return;
+        }
 
-      const blob = new Blob([latestPdfBytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      a.download = `自動火災報知設備点検票_清書_${cleanPages.length}枚分_${today}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setStatus(`清書済みPDF（手書き${cleanPages.length}枚分／公式PDF全${totalTemplatePages}ページ）をダウンロードしました。`);
+        const blob = new Blob([latestPdfBytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        a.download = `自動火災報知設備点検票_清書_${cleanPages.length}枚分_${today}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        setStatus(`清書済みPDF（手書き${cleanPages.length}枚分／公式PDF全${totalTemplatePages}ページ）をダウンロードしました。`);
+      } catch (err) {
+        console.error(err);
+        setStatus(`ダウンロードエラー: ${err.message}`, true);
+      }
     }
   </script>
 </body>
