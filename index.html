@@ -293,10 +293,10 @@
 <body>
   <header>
     <div>
-      <h1>自動火災報知設備点検票 清書アプリ（様式11・枚数連動＆「その1/その2」自動判別）</h1>
-      <div class="sub">手書き枚数分の清書ページ自動生成 → 「その○」判別＆編集 → 公式PDF複数ページ合成・保存</div>
+      <h1>自動火災報知設備点検票 清書アプリ（様式11・OCR高速化版）</h1>
+      <div class="sub">画像縮小＋ワーカー再利用で高速OCR → 「その○」判別＆編集 → 公式PDF複数ページ合成・保存</div>
     </div>
-    <div class="sub">GitHub Pages / ブラウザ完結版</div>
+    <div class="sub">GitHub Pages / 高速キャッシュ版</div>
   </header>
 
   <div class="container">
@@ -304,7 +304,7 @@
       <div class="card-header">
         <div>
           <span class="badge">STEP 1</span>
-          <span class="step-title">手書きデータの追加（複数枚対応）とOCR読み取り</span>
+          <span class="step-title">手書きデータの追加（複数枚対応）と高速OCR読み取り</span>
         </div>
       </div>
 
@@ -316,17 +316,23 @@
             <span class="hint">選んだ枚数分の清書ページが作成され、各画像から「その1」「その2」等を自動判別します。</span>
             <div id="selectedFileList" class="file-list">選択中のファイル：なし（清書ページ：1ページ分待機中）</div>
           </div>
+
+          <div class="form-group">
+            <label for="ocrMaxWidth">OCR用リサイズ最大幅 (px)</label>
+            <input type="number" id="ocrMaxWidth" value="1400" min="800" max="2400" step="100" />
+            <span class="hint">大きいほど細かい文字が残り、小さい（1200〜1400）ほど高速になります。</span>
+          </div>
         </div>
 
         <div>
           <div class="form-group">
             <label for="templatePdfFile">公式PDFテンプレート（様式11・複数ページ対応）</label>
             <input type="file" id="templatePdfFile" accept="application/pdf" onchange="handleTemplatePdfChange()" />
-            <span class="hint">未選択時は同階層の <code>template_11.pdf</code> を自動読み込みします（日本語フォントも自動取得）</span>
+            <span class="hint">未選択時は同階層の <code>template_11.pdf</code> を自動読み込みします（日本語フォントも並列取得＆キャッシュ）</span>
             <div id="templatePdfInfo" class="file-list">公式PDF情報：未読み込み</div>
           </div>
           <div class="btn-row">
-            <button id="btnOcr" type="button" onclick="runTesseractOcrAll()">選択した全画像をOCR＆自動判別</button>
+            <button id="btnOcr" type="button" onclick="runTesseractOcrAll()">選択した全画像を高速OCR＆自動判別</button>
             <button type="button" class="secondary" onclick="loadSampleData()">サンプル値で試す</button>
             <button type="button" class="outline" onclick="clearCurrentPageFields()">現在の清書ページをクリア</button>
           </div>
@@ -388,6 +394,8 @@
   </div>
 
   <script>
+    const CACHE_NAME = "tennkennhyou-fast-cache-v1";
+
     const FIELD_DEFINITIONS = [
       { key: "building_name", label: "名称", section: "基本情報", x: 130, y: 745, size: 9.5, type: "text", keywords: ["名称"] },
       { key: "building_address", label: "所在", section: "基本情報", x: 130, y: 727, size: 9.5, type: "text", keywords: ["所在"] },
@@ -477,7 +485,7 @@
     let cachedFontSource = "";
     let totalTemplatePages = 1;
 
-    window.addEventListener("DOMContentLoaded", async () => {
+    window.addEventListener("DOMContentLoaded", () => {
       try {
         buildEditorFormSkeleton();
         renderPageTabs();
@@ -485,12 +493,16 @@
         const libOk = typeof window.PDFLib !== "undefined";
         setStatus(
           libOk
-            ? "準備完了。日本語フォントを自動取得して描画します。"
+            ? "準備完了。バックグラウンドで日本語フォントを高速プリロード中..."
             : "PDFライブラリ（pdf-lib）の読み込みを確認中。通信環境をご確認ください。",
           !libOk
         );
         if (libOk) {
-          await getJapaneseFontBytes();
+          getJapaneseFontBytes().then((bytes) => {
+            if (bytes) {
+              setStatus(`準備完了。日本語フォント待機済み（${cachedFontSource}）。`);
+            }
+          });
         }
       } catch (err) {
         setStatus(`初期化エラー: ${err.message}`, true);
@@ -510,6 +522,112 @@
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
+    }
+
+    // OCR高速化：画像を最大幅に縮小し、グレースケール＋コントラスト強調で読み取りやすくする
+    async function preprocessImageForOcr(file, maxWidth = 1400) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+
+        img.onload = () => {
+          try {
+            URL.revokeObjectURL(objectUrl);
+            let targetW = img.width;
+            let targetH = img.height;
+
+            if (targetW > maxWidth) {
+              targetH = Math.round((targetH * maxWidth) / targetW);
+              targetW = maxWidth;
+            }
+
+            const canvas = document.createElement("canvas");
+            canvas.width = targetW;
+            canvas.height = targetH;
+            const ctx = canvas.getContext("2d");
+            ctx.filter = "grayscale(100%) contrast(125%)";
+            ctx.drawImage(img, 0, 0, targetW, targetH);
+
+            canvas.toBlob(
+              (blob) => {
+                resolve(blob || file);
+              },
+              "image/jpeg",
+              0.85
+            );
+          } catch (err) {
+            reject(err);
+          }
+        };
+
+        img.onerror = (err) => {
+          URL.revokeObjectURL(objectUrl);
+          reject(err);
+        };
+
+        img.src = objectUrl;
+      });
+    }
+
+    async function readCacheBuffer(cacheKey) {
+      if (!("caches" in window)) return null;
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        const hit = await cache.match(cacheKey);
+        if (hit) {
+          const buf = await hit.arrayBuffer();
+          if (buf.byteLength > 10000) return buf;
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    async function writeCacheBuffer(cacheKey, arrayBuffer) {
+      if (!("caches" in window) || !arrayBuffer) return;
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put(cacheKey, new Response(arrayBuffer.slice(0), {
+          headers: { "Content-Type": "application/octet-stream" }
+        }));
+      } catch (_) {}
+    }
+
+    async function fetchWithTimeout(url, timeoutMs = 6000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const buf = await res.arrayBuffer();
+        if (buf.byteLength < 10000) throw new Error("Too small");
+        return buf;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    function raceAnySuccess(promises) {
+      return new Promise((resolve, reject) => {
+        let settled = false;
+        let failCount = 0;
+        if (!promises.length) {
+          reject(new Error("No sources"));
+          return;
+        }
+        promises.forEach((p) => {
+          p.then((val) => {
+            if (!settled) {
+              settled = true;
+              resolve(val);
+            }
+          }).catch(() => {
+            failCount += 1;
+            if (!settled && failCount === promises.length) {
+              reject(new Error("All sources failed"));
+            }
+          });
+        });
+      });
     }
 
     function detectSonoPageNumber(text, fileName = "") {
@@ -745,6 +863,7 @@
       });
     }
 
+    // OCR高速化：ワーカーを1回生成して全画像で使い回す
     async function runTesseractOcrAll() {
       if (typeof window.Tesseract === "undefined") {
         setStatus("OCRライブラリ（Tesseract.js）が読み込まれていません。ネット接続を確認してください。", true);
@@ -753,6 +872,7 @@
 
       const files = Array.from(document.getElementById("handwrittenFile").files || []);
       const btn = document.getElementById("btnOcr");
+      const maxWidth = Math.max(800, Math.min(2400, Number(document.getElementById("ocrMaxWidth")?.value) || 1400));
 
       if (!files.length) {
         setStatus("OCRする手書き画像を1枚以上選択してください。", true);
@@ -763,19 +883,27 @@
       }
 
       btn.disabled = true;
+      const startMs = performance.now();
+      let worker = null;
+
       try {
+        setStatus("高速OCRワーカーを初期化中...");
+        worker = await window.Tesseract.createWorker("jpn+eng", 1, {
+          logger: (m) => {
+            if (m.status === "recognizing text" && typeof m.progress === "number") {
+              const pct = Math.round(m.progress * 100);
+              setStatus(`OCR解析中...（${pct}%）`);
+            }
+          }
+        });
+
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          setStatus(`OCR解析中...（${i + 1} / ${files.length}枚目：${file.name}）`);
+          setStatus(`画像を縮小・最適化中...（${i + 1} / ${files.length}枚目：${file.name}）`);
+          const processedImg = await preprocessImageForOcr(file, maxWidth);
 
-          const result = await window.Tesseract.recognize(file, "jpn+eng", {
-            logger: (m) => {
-              if (m.status === "recognizing text" && typeof m.progress === "number") {
-                const pct = Math.round(m.progress * 100);
-                setStatus(`OCR解析中...（${i + 1}/${files.length}枚目：${file.name} - ${pct}%）`);
-              }
-            }
-          });
+          setStatus(`高速OCR実行中...（${i + 1} / ${files.length}枚目：${file.name}）`);
+          const result = await worker.recognize(processedImg);
 
           const text = (result?.data?.text || "").trim();
           const page = cleanPages[i];
@@ -792,14 +920,18 @@
           guessFieldsFromText(text, page.fields);
         }
 
+        const elapsedSec = ((performance.now() - startMs) / 1000).toFixed(2);
         renderPageTabs();
         loadCleanPageToUi(activeCleanPageIdx);
-        setStatus(`${files.length}枚すべてのOCRと「その○」判別が完了しました。`);
+        setStatus(`${files.length}枚すべての高速OCR（${elapsedSec}秒）と「その○」判別が完了しました。`);
         await renderPreviewPdf();
       } catch (err) {
         console.error(err);
         setStatus(`OCRエラー: ${err.message}`, true);
       } finally {
+        if (worker) {
+          try { await worker.terminate(); } catch (_) {}
+        }
         btn.disabled = false;
       }
     }
@@ -905,34 +1037,41 @@
       activeCleanPageIdx = 0;
       renderPageTabs();
       loadCleanPageToUi(0);
-      setStatus("2枚分（その1・その2）のサンプルデータを反映しました。日本語フォント自動取得＆PDFプレビューを生成中...");
+      setStatus("2枚分（その1・その2）のサンプルデータを反映しました。高速PDFプレビューを生成中...");
       await renderPreviewPdf();
     }
 
     async function getJapaneseFontBytes() {
       if (cachedFontBytes) return cachedFontBytes;
 
-      const candidates = [
-        { url: "./NotoSansJP-Regular.ttf", label: "ローカル NotoSansJP-Regular.ttf" },
-        { url: "https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf", label: "jsDelivr NotoSansCJKjp" },
-        { url: "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf", label: "GitHub NotoSansJP" },
-        { url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf", label: "jsDelivr GoogleFonts NotoSansJP" }
+      const cacheKey = "font:NotoSansJP-Regular.ttf";
+      const cachedBuf = await readCacheBuffer(cacheKey);
+      if (cachedBuf) {
+        cachedFontBytes = cachedBuf;
+        cachedFontSource = "ブラウザキャッシュ（高速）";
+        return cachedFontBytes;
+      }
+
+      const sources = [
+        { url: "./NotoSansJP-Regular.ttf", label: "同階層 NotoSansJP-Regular.ttf", timeout: 4000 },
+        { url: "https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf", label: "jsDelivr NotoSansCJKjp", timeout: 7000 },
+        { url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf", label: "jsDelivr GoogleFonts NotoSansJP", timeout: 7000 },
+        { url: "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf", label: "GitHub NotoSansJP", timeout: 7000 }
       ];
 
-      for (const item of candidates) {
-        try {
-          const res = await fetch(item.url);
-          if (res.ok) {
-            const buf = await res.arrayBuffer();
-            if (buf.byteLength > 10000) {
-              cachedFontBytes = buf;
-              cachedFontSource = item.label;
-              return cachedFontBytes;
-            }
-          }
-        } catch (_) {}
+      try {
+        const winner = await raceAnySuccess(
+          sources.map((s) =>
+            fetchWithTimeout(s.url, s.timeout).then((buf) => ({ buf, label: s.label }))
+          )
+        );
+        cachedFontBytes = winner.buf;
+        cachedFontSource = winner.label;
+        await writeCacheBuffer(cacheKey, winner.buf);
+        return cachedFontBytes;
+      } catch (_) {
+        return null;
       }
-      return null;
     }
 
     async function getTemplatePdfArrayBuffer() {
@@ -940,13 +1079,15 @@
       if (fileInput.files && fileInput.files.length > 0) {
         return await fileInput.files[0].arrayBuffer();
       }
+
+      const cacheKey = "pdf:template_11.pdf";
       try {
-        const res = await fetch("./template_11.pdf");
-        if (res.ok) {
-          return await res.arrayBuffer();
-        }
-      } catch (_) {}
-      return null;
+        const buf = await fetchWithTimeout("./template_11.pdf", 4000);
+        await writeCacheBuffer(cacheKey, buf);
+        return buf;
+      } catch (_) {
+        return await readCacheBuffer(cacheKey);
+      }
     }
 
     async function createFallbackA4PdfDoc() {
@@ -981,8 +1122,9 @@
         return false;
       }
 
+      const startMs = performance.now();
       try {
-        setStatus("日本語フォントを自動取得してPDFを生成中...");
+        setStatus("高速取得・キャッシュを使ってPDFを生成中...");
         const [pdfBytes, fontBytes] = await Promise.all([
           getTemplatePdfArrayBuffer(),
           getJapaneseFontBytes()
@@ -1047,14 +1189,15 @@
           setTimeout(() => URL.revokeObjectURL(prevUrl), 2000);
         }
 
+        const elapsedSec = ((performance.now() - startMs) / 1000).toFixed(2);
         const notes = [];
         if (usedFallbackTemplate) notes.push("公式PDF未選択のため仮A4台紙で表示中");
         if (usedJapaneseFont) {
-          notes.push(`日本語フォント自動適用済（${cachedFontSource}）`);
+          notes.push(`日本語フォント適用済（${cachedFontSource}）`);
         } else {
-          notes.push("外部フォント未取得のため英数字のみ描画中（HTTP/GitHub Pagesまたは同階層にNotoSansJP-Regular.ttf配置で自動取得）");
+          notes.push("外部フォント未取得のため英数字のみ描画中");
         }
-        setStatus(`PDFプレビューを更新しました（全${totalTemplatePages}ページ／${notes.join("・")}）。`);
+        setStatus(`PDFプレビューを更新しました（${elapsedSec}秒／全${totalTemplatePages}ページ／${notes.join("・")}）。`);
         return true;
       } catch (err) {
         console.error(err);
