@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>自動火災報知設備点検票 清書アプリ（様式11）</title>
+  <title>自動火災報知設備点検票 清書アプリ（様式11・無料OCR版）</title>
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   <script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
+  <!-- APIキー不要のブラウザ内OCRライブラリ -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     :root {
       --primary: #1d4ed8;
@@ -101,10 +103,10 @@
       color: var(--muted);
     }
     input[type="text"],
-    input[type="password"],
     input[type="number"],
     input[type="file"],
-    select {
+    select,
+    textarea {
       width: 100%;
       padding: 8px 10px;
       border: 1px solid var(--border);
@@ -112,6 +114,7 @@
       font-size: 0.9rem;
       background: #fff;
       color: var(--text);
+      font-family: inherit;
     }
     .file-list {
       margin-top: 6px;
@@ -189,6 +192,18 @@
       padding: 12px;
       background: #f8fafc;
     }
+    .raw-ocr-box {
+      margin-bottom: 12px;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .raw-ocr-box textarea {
+      min-height: 90px;
+      font-size: 0.8rem;
+      margin-top: 6px;
+    }
     .section-title {
       background: #e2e8f0;
       color: #0f172a;
@@ -246,45 +261,40 @@
 <body>
   <header>
     <div>
-      <h1>自動火災報知設備点検票 清書アプリ（様式11・その1）</h1>
-      <div class="sub">複数枚対応・手書きOCR（任意）／手動入力・編集 → FESC公式PDF合成・保存</div>
+      <h1>自動火災報知設備点検票 清書アプリ（様式11・無料OCR版）</h1>
+      <div class="sub">APIキー不要・Tesseract.js OCR（複数枚対応）→ テキスト編集 → FESC公式PDF合成・保存</div>
     </div>
     <div class="sub">GitHub Pages / ブラウザ完結版</div>
   </header>
 
   <div class="container">
-    <!-- STEP 1: 入力と手書き読み取り -->
+    <!-- STEP 1: 入力とOCR読み取り -->
     <section class="card">
       <div class="card-header">
         <div>
           <span class="badge">STEP 1</span>
-          <span class="step-title">手書きデータの追加（複数枚対応）と読み取り</span>
+          <span class="step-title">手書きデータの追加（複数枚対応）とOCR読み取り</span>
         </div>
       </div>
 
       <div class="upload-grid">
         <div>
           <div class="form-group">
-            <label for="handwrittenFile">手書き点検票データ（複数枚選択可：JPG / PNG / WEBP / PDF）</label>
-            <input type="file" id="handwrittenFile" accept="image/*,application/pdf" multiple onchange="updateSelectedFileList()" />
-            <span class="hint">Ctrl/Cmdキーや範囲選択で複数枚を選べます。APIキーなしでも下の編集欄やサンプルから清書可能です。</span>
+            <label for="handwrittenFile">手書き点検票データ（複数枚選択可：JPG / PNG / WEBP）</label>
+            <input type="file" id="handwrittenFile" accept="image/*" multiple onchange="updateSelectedFileList()" />
+            <span class="hint">※Tesseract.jsは画像ファイル（JPG/PNG/WEBP等）に対応しています。初回は日本語学習データの取得に少し時間がかかります。</span>
             <div id="selectedFileList" class="file-list">選択中のファイル：なし</div>
-          </div>
-          <div class="form-group">
-            <label for="templatePdfFile">公式PDFテンプレート（様式11）</label>
-            <input type="file" id="templatePdfFile" accept="application/pdf" />
-            <span class="hint">未選択時は同階層の <code>template_11.pdf</code> を自動読み込みします</span>
           </div>
         </div>
 
         <div>
           <div class="form-group">
-            <label for="apiKey">Gemini APIキー（AI自動読み取りを使う場合のみ入力・任意）</label>
-            <input type="password" id="apiKey" placeholder="AIzaSy...（空欄のままでも手動入力・PDF清書は可能）" autocomplete="off" />
-            <span class="hint">APIキーなしで使う場合は、左欄の編集フォームに直接入力するか「サンプル値で試す」を押してください</span>
+            <label for="templatePdfFile">公式PDFテンプレート（様式11）</label>
+            <input type="file" id="templatePdfFile" accept="application/pdf" />
+            <span class="hint">未選択時は同階層の <code>template_11.pdf</code> を自動読み込みします</span>
           </div>
           <div class="btn-row">
-            <button id="btnAnalyze" onclick="analyzeHandwriting()">選択した手書きデータをAI読み取り</button>
+            <button id="btnOcr" onclick="runTesseractOcr()">選択した画像をOCR読み取り</button>
             <button type="button" class="secondary" onclick="loadSampleData()">サンプル値で試す</button>
             <button type="button" class="outline" onclick="clearAllFields()">全項目クリア</button>
           </div>
@@ -292,7 +302,7 @@
       </div>
 
       <div id="statusBar" class="status-bar">
-        準備完了。APIキーなしでも左欄の入力・PDFプレビュー・PDF保存がそのまま使えます。
+        準備完了。APIキー不要でOCR読み取り・テキスト編集・PDF清書・保存が使えます。
       </div>
     </section>
 
@@ -326,7 +336,7 @@
       </div>
 
       <div class="workspace">
-        <!-- 左：編集可能フォーム -->
+        <!-- 左：OCR生テキスト＆編集可能フォーム -->
         <div class="editor-pane" id="editorContainer"></div>
 
         <!-- 右：PDFプレビュー -->
@@ -342,71 +352,71 @@
     // 座標(x, y)はA4縦(595.28 x 841.89 pt)の左下原点基準。実際のPDFに合わせて微調整してください。
     const FIELD_DEFINITIONS = [
       // 基本情報
-      { key: "building_name", label: "名称", section: "基本情報", x: 130, y: 745, size: 9.5, type: "text" },
-      { key: "building_address", label: "所在", section: "基本情報", x: 130, y: 727, size: 9.5, type: "text" },
-      { key: "fire_manager", label: "防火管理者", section: "基本情報", x: 435, y: 745, size: 9, type: "text" },
-      { key: "witness", label: "立会者", section: "基本情報", x: 435, y: 727, size: 9, type: "text" },
-      { key: "inspection_type", label: "点検種別（機器・総合）", section: "基本情報", x: 130, y: 709, size: 9, type: "text" },
-      { key: "inspection_date", label: "点検年月日", section: "基本情報", x: 290, y: 709, size: 9, type: "text" },
-      { key: "inspector_name", label: "点検者 氏名", section: "基本情報", x: 130, y: 675, size: 9, type: "text" },
-      { key: "inspector_company", label: "点検者 所属会社・TEL", section: "基本情報", x: 290, y: 690, size: 8.5, type: "text" },
-      { key: "inspector_address", label: "点検者 住所", section: "基本情報", x: 290, y: 672, size: 8.5, type: "text" },
+      { key: "building_name", label: "名称", section: "基本情報", x: 130, y: 745, size: 9.5, type: "text", keywords: ["名称"] },
+      { key: "building_address", label: "所在", section: "基本情報", x: 130, y: 727, size: 9.5, type: "text", keywords: ["所在"] },
+      { key: "fire_manager", label: "防火管理者", section: "基本情報", x: 435, y: 745, size: 9, type: "text", keywords: ["防火管理者"] },
+      { key: "witness", label: "立会者", section: "基本情報", x: 435, y: 727, size: 9, type: "text", keywords: ["立会者"] },
+      { key: "inspection_type", label: "点検種別（機器・総合）", section: "基本情報", x: 130, y: 709, size: 9, type: "text", keywords: ["点検種別"] },
+      { key: "inspection_date", label: "点検年月日", section: "基本情報", x: 290, y: 709, size: 9, type: "text", keywords: ["点検年月日"] },
+      { key: "inspector_name", label: "点検者 氏名", section: "基本情報", x: 130, y: 675, size: 9, type: "text", keywords: ["氏名"] },
+      { key: "inspector_company", label: "点検者 所属会社・TEL", section: "基本情報", x: 290, y: 690, size: 8.5, type: "text", keywords: ["社名", "TEL"] },
+      { key: "inspector_address", label: "点検者 住所", section: "基本情報", x: 290, y: 672, size: 8.5, type: "text", keywords: ["住所"] },
 
       // 点検設備名（受信機）
-      { key: "receiver_maker", label: "製造者名", section: "点検設備名（受信機）", x: 275, y: 653, size: 9, type: "text" },
-      { key: "receiver_model", label: "型式等", section: "点検設備名（受信機）", x: 275, y: 639, size: 9, type: "text" },
-      { key: "receiver_year", label: "製造年", section: "点検設備名（受信機）", x: 470, y: 639, size: 9, type: "text" },
+      { key: "receiver_maker", label: "製造者名", section: "点検設備名（受信機）", x: 275, y: 653, size: 9, type: "text", keywords: ["製造者名", "松下", "BVJ"] },
+      { key: "receiver_model", label: "型式等", section: "点検設備名（受信機）", x: 275, y: 639, size: 9, type: "text", keywords: ["型式等", "受第", "回線"] },
+      { key: "receiver_year", label: "製造年", section: "点検設備名（受信機）", x: 470, y: 639, size: 9, type: "text", keywords: ["年製"] },
 
       // 予備電源・非常電源（内蔵型）
-      { key: "battery_shape_val", label: "外形（内容）", section: "予備電源・非常電源", x: 240, y: 593, size: 8.5, type: "text" },
-      { key: "battery_shape_judge", label: "外形（判定）", section: "予備電源・非常電源", x: 348, y: 593, size: 9, type: "judge" },
-      { key: "battery_label_val", label: "表示（内容）", section: "予備電源・非常電源", x: 240, y: 579, size: 8.5, type: "text" },
-      { key: "battery_label_judge", label: "表示（判定）", section: "予備電源・非常電源", x: 348, y: 579, size: 9, type: "judge" },
-      { key: "battery_volt_val", label: "※端子電圧（内容）", section: "予備電源・非常電源", x: 240, y: 565, size: 8.5, type: "text" },
-      { key: "battery_volt_judge", label: "※端子電圧（判定）", section: "予備電源・非常電源", x: 348, y: 565, size: 9, type: "judge" },
-      { key: "battery_switch_val", label: "※切替装置（内容）", section: "予備電源・非常電源", x: 240, y: 551, size: 8.5, type: "text" },
-      { key: "battery_switch_judge", label: "※切替装置（判定）", section: "予備電源・非常電源", x: 348, y: 551, size: 9, type: "judge" },
-      { key: "battery_charge_val", label: "※充電装置（内容）", section: "予備電源・非常電源", x: 240, y: 537, size: 8.5, type: "text" },
-      { key: "battery_charge_judge", label: "※充電装置（判定）", section: "予備電源・非常電源", x: 348, y: 537, size: 9, type: "judge" },
-      { key: "battery_wire_val", label: "※結線接続（内容）", section: "予備電源・非常電源", x: 240, y: 523, size: 8.5, type: "text" },
-      { key: "battery_wire_judge", label: "※結線接続（判定）", section: "予備電源・非常電源", x: 348, y: 523, size: 9, type: "judge" },
+      { key: "battery_shape_val", label: "外形（内容）", section: "予備電源・非常電源", x: 240, y: 593, size: 8.5, type: "text", keywords: ["Ah", "外形"] },
+      { key: "battery_shape_judge", label: "外形（判定）", section: "予備電源・非常電源", x: 348, y: 593, size: 9, type: "judge", keywords: [] },
+      { key: "battery_label_val", label: "表示（内容）", section: "予備電源・非常電源", x: 240, y: 579, size: 8.5, type: "text", keywords: ["品評"] },
+      { key: "battery_label_judge", label: "表示（判定）", section: "予備電源・非常電源", x: 348, y: 579, size: 9, type: "judge", keywords: [] },
+      { key: "battery_volt_val", label: "※端子電圧（内容）", section: "予備電源・非常電源", x: 240, y: 565, size: 8.5, type: "text", keywords: ["端子電圧", "24V", "24 V"] },
+      { key: "battery_volt_judge", label: "※端子電圧（判定）", section: "予備電源・非常電源", x: 348, y: 565, size: 9, type: "judge", keywords: [] },
+      { key: "battery_switch_val", label: "※切替装置（内容）", section: "予備電源・非常電源", x: 240, y: 551, size: 8.5, type: "text", keywords: ["切替装置", "自動切替"] },
+      { key: "battery_switch_judge", label: "※切替装置（判定）", section: "予備電源・非常電源", x: 348, y: 551, size: 9, type: "judge", keywords: [] },
+      { key: "battery_charge_val", label: "※充電装置（内容）", section: "予備電源・非常電源", x: 240, y: 537, size: 8.5, type: "text", keywords: ["充電装置", "トリクル"] },
+      { key: "battery_charge_judge", label: "※充電装置（判定）", section: "予備電源・非常電源", x: 348, y: 537, size: 9, type: "judge", keywords: [] },
+      { key: "battery_wire_val", label: "※結線接続（内容）", section: "予備電源・非常電源", x: 240, y: 523, size: 8.5, type: "text", keywords: ["コネクター", "結線接続"] },
+      { key: "battery_wire_judge", label: "※結線接続（判定）", section: "予備電源・非常電源", x: 348, y: 523, size: 9, type: "judge", keywords: [] },
 
       // 受信機・中継器
-      { key: "env_val", label: "周囲の状況（内容）", section: "受信機・中継器", x: 240, y: 509, size: 8.5, type: "text" },
-      { key: "env_judge", label: "周囲の状況（判定）", section: "受信機・中継器", x: 348, y: 509, size: 9, type: "judge" },
-      { key: "body_shape_val", label: "外形（内容）", section: "受信機・中継器", x: 240, y: 495, size: 8.5, type: "text" },
-      { key: "body_shape_judge", label: "外形（判定）", section: "受信機・中継器", x: 348, y: 495, size: 9, type: "judge" },
-      { key: "body_label_val", label: "表示（内容）", section: "受信機・中継器", x: 240, y: 481, size: 8.5, type: "text" },
-      { key: "body_label_judge", label: "表示（判定）", section: "受信機・中継器", x: 348, y: 481, size: 9, type: "judge" },
-      { key: "zone_disp_val", label: "警戒区域の表示装置（内容）", section: "受信機・中継器", x: 240, y: 467, size: 8.5, type: "text" },
-      { key: "zone_disp_judge", label: "警戒区域の表示装置（判定）", section: "受信機・中継器", x: 348, y: 467, size: 9, type: "judge" },
-      { key: "voltmeter_val", label: "電圧計（内容）", section: "受信機・中継器", x: 240, y: 453, size: 8.5, type: "text" },
-      { key: "voltmeter_judge", label: "電圧計（判定）", section: "受信機・中継器", x: 348, y: 453, size: 9, type: "judge" },
-      { key: "switches_val", label: "スイッチ類（内容）", section: "受信機・中継器", x: 240, y: 439, size: 8.5, type: "text" },
-      { key: "switches_judge", label: "スイッチ類（判定）", section: "受信機・中継器", x: 348, y: 439, size: 9, type: "judge" },
-      { key: "fuses_val", label: "ヒューズ類（内容）", section: "受信機・中継器", x: 240, y: 425, size: 8.5, type: "text" },
-      { key: "fuses_judge", label: "ヒューズ類（判定）", section: "受信機・中継器", x: 348, y: 425, size: 9, type: "judge" },
-      { key: "relay_judge", label: "※継電器（判定）", section: "受信機・中継器", x: 348, y: 411, size: 9, type: "judge" },
-      { key: "lamp_judge", label: "表示灯（判定）", section: "受信機・中継器", x: 348, y: 397, size: 9, type: "judge" },
-      { key: "phone_judge", label: "通話装置（判定）", section: "受信機・中継器", x: 348, y: 383, size: 9, type: "judge" },
-      { key: "wiring_judge", label: "※結線接続（判定）", section: "受信機・中継器", x: 348, y: 369, size: 9, type: "judge" },
-      { key: "ground_val", label: "接地（内容）", section: "受信機・中継器", x: 240, y: 355, size: 8.5, type: "text" },
-      { key: "ground_judge", label: "接地（判定）", section: "受信機・中継器", x: 348, y: 355, size: 9, type: "judge" },
-      { key: "accessory_val", label: "附属装置（内容）", section: "受信機・中継器", x: 240, y: 341, size: 8.5, type: "text" },
-      { key: "accessory_judge", label: "附属装置（判定）", section: "受信機・中継器", x: 348, y: 341, size: 9, type: "judge" },
+      { key: "env_val", label: "周囲の状況（内容）", section: "受信機・中継器", x: 240, y: 509, size: 8.5, type: "text", keywords: ["周囲の状況", "エントランス"] },
+      { key: "env_judge", label: "周囲の状況（判定）", section: "受信機・中継器", x: 348, y: 509, size: 9, type: "judge", keywords: [] },
+      { key: "body_shape_val", label: "外形（内容）", section: "受信機・中継器", x: 240, y: 495, size: 8.5, type: "text", keywords: ["埋込型", "壁掛型", "P-2"] },
+      { key: "body_shape_judge", label: "外形（判定）", section: "受信機・中継器", x: 348, y: 495, size: 9, type: "judge", keywords: [] },
+      { key: "body_label_val", label: "表示（内容）", section: "受信機・中継器", x: 240, y: 481, size: 8.5, type: "text", keywords: [] },
+      { key: "body_label_judge", label: "表示（判定）", section: "受信機・中継器", x: 348, y: 481, size: 9, type: "judge", keywords: [] },
+      { key: "zone_disp_val", label: "警戒区域の表示装置（内容）", section: "受信機・中継器", x: 240, y: 467, size: 8.5, type: "text", keywords: ["警戒区域"] },
+      { key: "zone_disp_judge", label: "警戒区域の表示装置（判定）", section: "受信機・中継器", x: 348, y: 467, size: 9, type: "judge", keywords: [] },
+      { key: "voltmeter_val", label: "電圧計（内容）", section: "受信機・中継器", x: 240, y: 453, size: 8.5, type: "text", keywords: ["電圧計", "交流電源"] },
+      { key: "voltmeter_judge", label: "電圧計（判定）", section: "受信機・中継器", x: 348, y: 453, size: 9, type: "judge", keywords: [] },
+      { key: "switches_val", label: "スイッチ類（内容）", section: "受信機・中継器", x: 240, y: 439, size: 8.5, type: "text", keywords: ["スイッチ"] },
+      { key: "switches_judge", label: "スイッチ類（判定）", section: "受信機・中継器", x: 348, y: 439, size: 9, type: "judge", keywords: [] },
+      { key: "fuses_val", label: "ヒューズ類（内容）", section: "受信機・中継器", x: 240, y: 425, size: 8.5, type: "text", keywords: ["ヒューズ類", "0.5"] },
+      { key: "fuses_judge", label: "ヒューズ類（判定）", section: "受信機・中継器", x: 348, y: 425, size: 9, type: "judge", keywords: [] },
+      { key: "relay_judge", label: "※継電器（判定）", section: "受信機・中継器", x: 348, y: 411, size: 9, type: "judge", keywords: [] },
+      { key: "lamp_judge", label: "表示灯（判定）", section: "受信機・中継器", x: 348, y: 397, size: 9, type: "judge", keywords: [] },
+      { key: "phone_judge", label: "通話装置（判定）", section: "受信機・中継器", x: 348, y: 383, size: 9, type: "judge", keywords: [] },
+      { key: "wiring_judge", label: "※結線接続（判定）", section: "受信機・中継器", x: 348, y: 369, size: 9, type: "judge", keywords: [] },
+      { key: "ground_val", label: "接地（内容）", section: "受信機・中継器", x: 240, y: 355, size: 8.5, type: "text", keywords: ["接地"] },
+      { key: "ground_judge", label: "接地（判定）", section: "受信機・中継器", x: 348, y: 355, size: 9, type: "judge", keywords: [] },
+      { key: "accessory_val", label: "附属装置（内容）", section: "受信機・中継器", x: 240, y: 341, size: 8.5, type: "text", keywords: ["附属装置"] },
+      { key: "accessory_judge", label: "附属装置（判定）", section: "受信機・中継器", x: 348, y: 341, size: 9, type: "judge", keywords: [] },
 
       // ※火災表示等・その他
-      { key: "fire_disp_accum_judge", label: "火災表示等：蓄積式（判定）", section: "火災表示等・その他", x: 348, y: 327, size: 9, type: "judge" },
-      { key: "fire_disp_analog_judge", label: "火災表示等：アナログ式（判定）", section: "火災表示等・その他", x: 348, y: 313, size: 9, type: "judge" },
-      { key: "fire_disp_two_judge", label: "火災表示等：二信号式（判定）", section: "火災表示等・その他", x: 348, y: 299, size: 9, type: "judge" },
-      { key: "fire_disp_other_judge", label: "火災表示等：その他（判定）", section: "火災表示等・その他", x: 348, y: 285, size: 9, type: "judge" },
-      { key: "caution_judge", label: "※注意表示（判定）", section: "火災表示等・その他", x: 348, y: 271, size: 9, type: "judge" },
-      { key: "loop_val", label: "回路導通（内容）", section: "火災表示等・その他", x: 240, y: 257, size: 8.5, type: "text" },
-      { key: "loop_judge", label: "回路導通（判定）", section: "火災表示等・その他", x: 348, y: 257, size: 9, type: "judge" },
-      { key: "temp_set_judge", label: "設定表示温度等（判定）", section: "火災表示等・その他", x: 348, y: 243, size: 9, type: "judge" },
-      { key: "detector_disp_judge", label: "感知器作動等の表示（判定）", section: "火災表示等・その他", x: 348, y: 229, size: 9, type: "judge" },
-      { key: "spare_val", label: "予備品等（内容）", section: "火災表示等・その他", x: 240, y: 215, size: 8.5, type: "text" },
-      { key: "spare_judge", label: "予備品等（判定）", section: "火災表示等・その他", x: 348, y: 215, size: 9, type: "judge" }
+      { key: "fire_disp_accum_judge", label: "火災表示等：蓄積式（判定）", section: "火災表示等・その他", x: 348, y: 327, size: 9, type: "judge", keywords: [] },
+      { key: "fire_disp_analog_judge", label: "火災表示等：アナログ式（判定）", section: "火災表示等・その他", x: 348, y: 313, size: 9, type: "judge", keywords: [] },
+      { key: "fire_disp_two_judge", label: "火災表示等：二信号式（判定）", section: "火災表示等・その他", x: 348, y: 299, size: 9, type: "judge", keywords: [] },
+      { key: "fire_disp_other_judge", label: "火災表示等：その他（判定）", section: "火災表示等・その他", x: 348, y: 285, size: 9, type: "judge", keywords: [] },
+      { key: "caution_judge", label: "※注意表示（判定）", section: "火災表示等・その他", x: 348, y: 271, size: 9, type: "judge", keywords: [] },
+      { key: "loop_val", label: "回路導通（内容）", section: "火災表示等・その他", x: 240, y: 257, size: 8.5, type: "text", keywords: ["回路導通", "常時監視"] },
+      { key: "loop_judge", label: "回路導通（判定）", section: "火災表示等・その他", x: 348, y: 257, size: 9, type: "judge", keywords: [] },
+      { key: "temp_set_judge", label: "設定表示温度等（判定）", section: "火災表示等・その他", x: 348, y: 243, size: 9, type: "judge", keywords: [] },
+      { key: "detector_disp_judge", label: "感知器作動等の表示（判定）", section: "火災表示等・その他", x: 348, y: 229, size: 9, type: "judge", keywords: [] },
+      { key: "spare_val", label: "予備品等（内容）", section: "火災表示等・その他", x: 240, y: 215, size: 8.5, type: "text", keywords: ["予備品", "ヒューズ等"] },
+      { key: "spare_judge", label: "予備品等（判定）", section: "火災表示等・その他", x: 348, y: 215, size: 9, type: "judge", keywords: [] }
     ];
 
     let latestPdfBytes = null;
@@ -444,8 +454,20 @@
     function buildEditorForm() {
       const container = document.getElementById("editorContainer");
       container.innerHTML = "";
-      let currentSection = "";
 
+      // OCR生テキスト確認・コピー用エリア
+      const rawBox = document.createElement("div");
+      rawBox.className = "raw-ocr-box";
+      rawBox.innerHTML = `
+        <label for="rawOcrText">OCR抽出テキスト全文（手書きの誤読確認・コピー用）</label>
+        <textarea id="rawOcrText" placeholder="OCRを実行すると、ここに抽出された文字一覧が表示されます。"></textarea>
+        <div class="btn-row" style="margin-top: 6px;">
+          <button type="button" class="outline" onclick="applyKeywordGuessFromRawText()">OCR全文からキーワード自動当てはめ</button>
+        </div>
+      `;
+      container.appendChild(rawBox);
+
+      let currentSection = "";
       FIELD_DEFINITIONS.forEach((field) => {
         if (field.section !== currentSection) {
           currentSection = field.section;
@@ -485,119 +507,80 @@
       });
     }
 
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(",")[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    }
-
-    // 1枚分の手書きファイルをGemini APIで構造化JSONに変換
-    async function analyzeSingleFile(file, apiKey) {
-      const base64Data = await fileToBase64(file);
-      const schemaGuide = FIELD_DEFINITIONS
-        .map((f) => `"${f.key}": "${f.label}"`)
-        .join(",\n  ");
-
-      const prompt = `
-あなたは日本の消防設備点検書類の作成を支援するアシスタントです。
-添付された手書きの「自動火災報知設備点検票（別記様式第11・その1）」を読み取り、清書用のJSONを出力してください。
-
-【ルール】
-1. 読み取れない箇所や未記入欄は空文字 "" にする。
-2. 手書きの誤字や略記は消防設備点検の文脈に沿って整える。
-3. 判定欄（_judge）は丸印を "○"、バツ印を "×"、斜線を "/"、未記入を "" にする。
-4. 出力はJSONオブジェクトのみとし、余計な文章やコードブロックは含めないこと。
-
-【JSONキー一覧】
-{
-  ${schemaGuide}
-}
-`;
-
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  { text: prompt },
-                  {
-                    inline_data: {
-                      mime_type: file.type || "image/png",
-                      data: base64Data
-                    }
-                  }
-                ]
-              }
-            ],
-            generationConfig: {
-              responseMimeType: "application/json",
-              temperature: 0.1
-            }
-          })
-        }
-      );
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`APIリクエスト失敗 (${response.status}): ${errText}`);
-      }
-
-      const data = await response.json();
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!rawText) {
-        throw new Error("読み取り結果が空でした。");
-      }
-      return JSON.parse(rawText);
-    }
-
-    // 複数枚選択に対応したAI読み取り（空欄を優先的に埋めていくマージ方式）
-    async function analyzeHandwriting() {
+    // Tesseract.js による複数枚OCR処理（APIキー不要）
+    async function runTesseractOcr() {
       const files = Array.from(document.getElementById("handwrittenFile").files || []);
-      const apiKey = document.getElementById("apiKey").value.trim();
-      const btn = document.getElementById("btnAnalyze");
+      const btn = document.getElementById("btnOcr");
 
       if (!files.length) {
-        setStatus("手書きデータ（画像またはPDF）を1枚以上選択してください。", true);
-        return;
-      }
-      if (!apiKey) {
-        setStatus("AI自動読み取りにはGemini APIキーが必要です。APIキーなしで使う場合は、左欄の手動入力や「サンプル値で試す」をご利用ください。", true);
+        setStatus("OCRする画像を1枚以上選択してください。", true);
         return;
       }
 
       btn.disabled = true;
-      const mergedData = {};
+      const combinedLines = [];
 
       try {
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          setStatus(`手書きデータをAI読み取り中...（${i + 1} / ${files.length}枚目：${file.name}）`);
-          const parsed = await analyzeSingleFile(file, apiKey);
+          setStatus(`OCR解析中...（${i + 1} / ${files.length}枚目：${file.name}）`);
 
-          FIELD_DEFINITIONS.forEach((field) => {
-            const val = (parsed[field.key] ?? "").toString().trim();
-            if (val && !mergedData[field.key]) {
-              mergedData[field.key] = val;
+          const result = await Tesseract.recognize(file, "jpn+eng", {
+            logger: (m) => {
+              if (m.status === "recognizing text" && typeof m.progress === "number") {
+                const pct = Math.round(m.progress * 100);
+                setStatus(`OCR解析中...（${i + 1}/${files.length}枚目：${file.name} - ${pct}%）`);
+              }
             }
           });
+
+          const text = (result?.data?.text || "").trim();
+          combinedLines.push(`--- [${i + 1}] ${file.name} ---\n${text}`);
         }
 
-        applyDataToForm(mergedData);
-        setStatus(`${files.length}枚の手書き読み取りが完了しました。左欄のテキストを必要に応じて修正し、PDFを保存してください。`);
-        await renderPreviewPdf();
+        const fullText = combinedLines.join("\n\n");
+        document.getElementById("rawOcrText").value = fullText;
+        applyKeywordGuessFromRawText();
+        setStatus(`${files.length}枚のOCRが完了しました。手書き部分の誤読を各項目欄で修正してください。`);
       } catch (err) {
         console.error(err);
-        setStatus(`読み取りエラー: ${err.message}`, true);
+        setStatus(`OCRエラー: ${err.message}`, true);
       } finally {
         btn.disabled = false;
       }
+    }
+
+    // OCR抽出テキストの行から、一致するキーワードを含む行を各項目へ仮当てはめ
+    function applyKeywordGuessFromRawText() {
+      const rawText = document.getElementById("rawOcrText").value || "";
+      const lines = rawText
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith("--- ["));
+
+      if (!lines.length) return;
+
+      FIELD_DEFINITIONS.forEach((field) => {
+        if (field.type !== "text" || !field.keywords || !field.keywords.length) return;
+        const el = document.getElementById(`field_${field.key}`);
+        if (!el || el.value.trim()) return;
+
+        const matchedLine = lines.find((line) =>
+          field.keywords.some((kw) => kw && line.includes(kw))
+        );
+        if (matchedLine) {
+          el.value = matchedLine;
+        }
+      });
+    }
+
+    function clearAllFields() {
+      document.getElementById("rawOcrText").value = "";
+      FIELD_DEFINITIONS.forEach((field) => {
+        const el = document.getElementById(`field_${field.key}`);
+        if (el) el.value = "";
+      });
+      setStatus("全入力項目をクリアしました。");
     }
 
     function applyDataToForm(data) {
@@ -607,14 +590,6 @@
           el.value = data[field.key] ?? "";
         }
       });
-    }
-
-    function clearAllFields() {
-      FIELD_DEFINITIONS.forEach((field) => {
-        const el = document.getElementById(`field_${field.key}`);
-        if (el) el.value = "";
-      });
-      setStatus("全入力項目をクリアしました。");
     }
 
     async function loadSampleData() {
